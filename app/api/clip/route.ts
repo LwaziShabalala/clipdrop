@@ -86,11 +86,11 @@ export async function POST(req: NextRequest) {
     console.timeEnd(`[${clipId}] 1-trim-watermark`);
 
     console.time(`[${clipId}] 2-gif-palette`);
-    // 2) Watermarked GIF — larger palette + diff stats + dithering to avoid graininess
+    // 2) Watermarked GIF — reduced fps/scale so Reddit animates it in the feed
     await execFileAsync("ffmpeg", [
       "-y",
       "-i", mp4Out,
-      "-vf", "fps=18,scale=640:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
+      "-vf", "fps=12,scale=480:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
       paletteOut,
     ]);
     console.timeEnd(`[${clipId}] 2-gif-palette`);
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       "-y",
       "-i", mp4Out,
       "-i", paletteOut,
-      "-lavfi", "fps=18,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
+      "-lavfi", "fps=12,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
       "-loop", "0",
       gifOut,
     ]);
@@ -128,14 +128,14 @@ export async function POST(req: NextRequest) {
       await execFileAsync("ffmpeg", [
         "-y",
         "-i", mp4Out,
-        "-vf", "fps=14,scale=480:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
+        "-vf", "fps=10,scale=360:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
         paletteOut,
       ]);
       await execFileAsync("ffmpeg", [
         "-y",
         "-i", mp4Out,
         "-i", paletteOut,
-        "-lavfi", "fps=14,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
+        "-lavfi", "fps=10,scale=360:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
         "-loop", "0",
         gifOut,
       ]);
