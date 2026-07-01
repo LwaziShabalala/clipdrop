@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     // Watermark position: bottom-right, with small margin. Overlay scaled relative to clip width.
     const watermarkFilter =
-      "[1:v]scale=iw*0.38:-1[wm];[0:v][wm]overlay=W-w-20:H-h-20:format=auto";
+      "[1:v]scale=iw*0.28:-1[wm];[0:v][wm]overlay=16:16:format=auto";
 
     console.time(`[${clipId}] 1-trim-watermark`);
     // 1) Trimmed + watermarked MP4
