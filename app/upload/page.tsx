@@ -423,7 +423,7 @@ function ResultPanel({ clip, onReset }: { clip: ClipResult; onReset: () => void 
   const [copied, setCopied] = useState<string | null>(null);
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
   const pageLink = `${siteUrl}${clip.pageUrl}`;
-  const gifLink = `${siteUrl}${clip.gifUrl}`;
+  const gifLink = clip.gifUrl;
 
   const copy = (label: string, value: string) => {
     navigator.clipboard.writeText(value);

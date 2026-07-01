@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import os from "os";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+// Use the OS temp dir — works on local dev and Railway (a real Linux box with
+// ffmpeg). This app's API routes are NOT meant to run on Vercel, which has no
+// ffmpeg and a read-only filesystem outside /tmp — see SETUP.md.
+const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
   try {

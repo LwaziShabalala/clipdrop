@@ -1,5 +1,45 @@
 [
   {
+    "clipId": "209ede2f-5853-4564-9e57-314716d2db2f",
+    "caption": "",
+    "mp4Url": "https://pub-03528ea0502249a58583dfb558131918.r2.dev/clips/209ede2f-5853-4564-9e57-314716d2db2f.mp4",
+    "gifUrl": "https://pub-03528ea0502249a58583dfb558131918.r2.dev/clips/209ede2f-5853-4564-9e57-314716d2db2f.gif",
+    "thumbUrl": "https://pub-03528ea0502249a58583dfb558131918.r2.dev/clips/209ede2f-5853-4564-9e57-314716d2db2f.jpg",
+    "width": 720,
+    "height": 1280,
+    "createdAt": "2026-06-30T18:02:35.434Z"
+  },
+  {
+    "clipId": "c2ec05b4-469a-4f29-84e0-953707a385eb",
+    "caption": "",
+    "mp4Url": "https://pub-xxxxxxxxxxxx.r2.dev/clips/c2ec05b4-469a-4f29-84e0-953707a385eb.mp4",
+    "gifUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/c2ec05b4-469a-4f29-84e0-953707a385eb.gif",
+    "thumbUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/c2ec05b4-469a-4f29-84e0-953707a385eb.jpg",
+    "width": 634,
+    "height": 1224,
+    "createdAt": "2026-06-30T17:43:11.612Z"
+  },
+  {
+    "clipId": "40a44adc-8d3d-47b4-b944-7f580f94ddb4",
+    "caption": "",
+    "mp4Url": "https://pub-xxxxxxxxxxxx.r2.dev/clips/40a44adc-8d3d-47b4-b944-7f580f94ddb4.mp4",
+    "gifUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/40a44adc-8d3d-47b4-b944-7f580f94ddb4.gif",
+    "thumbUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/40a44adc-8d3d-47b4-b944-7f580f94ddb4.jpg",
+    "width": 356,
+    "height": 640,
+    "createdAt": "2026-06-30T14:46:47.603Z"
+  },
+  {
+    "clipId": "4008b8ad-08d9-4598-8726-8b24edbafa8a",
+    "caption": "",
+    "mp4Url": "https://pub-xxxxxxxxxxxx.r2.dev/clips/4008b8ad-08d9-4598-8726-8b24edbafa8a.mp4",
+    "gifUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/4008b8ad-08d9-4598-8726-8b24edbafa8a.gif",
+    "thumbUrl": "https://pub-xxxxxxxxxxxx.r2.dev/clips/4008b8ad-08d9-4598-8726-8b24edbafa8a.jpg",
+    "width": 480,
+    "height": 848,
+    "createdAt": "2026-06-30T14:29:32.402Z"
+  },
+  {
     "clipId": "f5ab29b7-2101-495a-9e17-49f7f0370c33",
     "caption": "",
     "mp4Url": "/clips/f5ab29b7-2101-495a-9e17-49f7f0370c33.mp4",

@@ -18,8 +18,8 @@ export async function generateMetadata({
 
   const title = clip.caption || "Untitled clip — ClipDrop";
   const pageUrl = `${SITE_URL}/c/${clip.clipId}`;
-  const gifAbsUrl = `${SITE_URL}${clip.gifUrl}`;
-  const mp4AbsUrl = `${SITE_URL}${clip.mp4Url}`;
+  const gifAbsUrl = clip.gifUrl;
+  const mp4AbsUrl = clip.mp4Url;
 
   return {
     title,
@@ -70,7 +70,7 @@ export default async function ClipPage({
 
   if (!clip) notFound();
 
-  const gifAbsUrl = `${SITE_URL}${clip.gifUrl}`;
+  const gifAbsUrl = clip.gifUrl;
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0] flex flex-col items-center px-4 py-10">
@@ -113,9 +113,8 @@ function CopyField({ label, value, accent }: { label: string; value: string; acc
     <div className="flex-1 min-w-[260px]">
       <p className="text-[11px] uppercase tracking-wide text-[#6a6a72] mb-1.5 font-medium">{label}</p>
       <div
-        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${
-          accent ? "border-[#ff3d6e]/40 bg-[#ff3d6e]/[0.06]" : "border-[#26262c] bg-[#141417]"
-        }`}
+        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 ${accent ? "border-[#ff3d6e]/40 bg-[#ff3d6e]/[0.06]" : "border-[#26262c] bg-[#141417]"
+          }`}
       >
         <code className="text-xs text-[#c8c8cc] truncate flex-1">{value}</code>
       </div>
