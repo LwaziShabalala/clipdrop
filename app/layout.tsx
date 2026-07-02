@@ -12,6 +12,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  console.log("GA ID:", process.env.NEXT_PUBLIC_GA_ID);
+
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
