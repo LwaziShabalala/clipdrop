@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, readFile, unlink } from "fs/promises";
+import { mkdir, readFile, unlink, stat } from "fs/promises";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
@@ -15,8 +15,46 @@ const WATERMARK_PATH = path.join(process.cwd(), "public", "logo", "watermark.png
 
 const MAX_CLIP_SECONDS = 15;
 
+// Reddit only reliably rehosts + auto-plays a direct-linked GIF when it's
+// comfortably under its ~20MB practical image cap. "Doesn't play on Reddit"
+// is almost always a file that's too heavy, not a platform restriction.
+const MAX_GIF_BYTES = 8 * 1024 * 1024; // 8MB hard ceiling
+
+// Quality tiers, best first. Each is only tried if the previous tier's
+// output is still over MAX_GIF_BYTES — most clips get the top tier, only
+// busy/high-motion ones fall back.
+const GIF_TIERS = [
+  { width: 640, fps: 12 },
+  { width: 540, fps: 12 },
+  { width: 480, fps: 10 },
+  { width: 400, fps: 8 },
+];
+
 function safeName(name: string) {
   return path.basename(name);
+}
+
+async function encodeGif(
+  mp4Path: string,
+  paletteOut: string,
+  gifOut: string,
+  width: number,
+  fps: number
+) {
+  await execFileAsync("ffmpeg", [
+    "-y",
+    "-i", mp4Path,
+    "-vf", `fps=${fps},scale=${width}:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff`,
+    paletteOut,
+  ]);
+  await execFileAsync("ffmpeg", [
+    "-y",
+    "-i", mp4Path,
+    "-i", paletteOut,
+    "-lavfi", `fps=${fps},scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg`,
+    "-loop", "0",
+    gifOut,
+  ]);
 }
 
 export async function POST(req: NextRequest) {
@@ -62,12 +100,32 @@ export async function POST(req: NextRequest) {
     thumbOut = path.join(WORK_DIR, `${clipId}.jpg`);
     paletteOut = path.join(WORK_DIR, `${clipId}_palette.png`);
 
-    // Watermark position: bottom-right, with small margin. Overlay scaled relative to clip width.
-    const watermarkFilter =
-      "[1:v]scale=iw*0.28:-1[wm];[0:v][wm]overlay=16:16:format=auto";
+    // Probe the SOURCE video's real dimensions up front. We need this to
+    // size the watermark relative to the actual frame — trimming/overlay
+    // don't change width/height, so this doubles as the final output size.
+    console.time(`[${clipId}] 1-probe-source`);
+    const { stdout: srcProbeOut } = await execFileAsync("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height",
+      "-of", "json",
+      sourcePath,
+    ]);
+    console.timeEnd(`[${clipId}] 1-probe-source`);
+    const srcProbe = JSON.parse(srcProbeOut);
+    const width = srcProbe.streams?.[0]?.width ?? 1280;
+    const height = srcProbe.streams?.[0]?.height ?? 720;
 
-    console.time(`[${clipId}] 1-trim-watermark`);
-    // 1) Trimmed + watermarked MP4
+    // Watermark sized relative to the VIDEO's width (the old code scaled it
+    // relative to the watermark PNG's own width, which is why it rendered
+    // tiny). ~22% of frame width, true bottom-right, margin scales with
+    // resolution so it looks consistent across source sizes.
+    const watermarkWidth = Math.round(width * 0.22);
+    const margin = Math.max(12, Math.round(width * 0.025));
+    const watermarkFilter =
+      `[1:v]scale=${watermarkWidth}:-1[wm];[0:v][wm]overlay=W-w-${margin}:H-h-${margin}:format=auto`;
+
+    console.time(`[${clipId}] 2-trim-watermark`);
     await execFileAsync("ffmpeg", [
       "-y",
       "-ss", String(startTime),
@@ -77,37 +135,31 @@ export async function POST(req: NextRequest) {
       "-filter_complex", watermarkFilter,
       "-c:v", "libx264",
       "-preset", "fast",
-      "-crf", "23",
+      "-crf", "20",
       "-c:a", "aac",
       "-b:a", "128k",
       "-movflags", "+faststart",
       mp4Out,
     ]);
-    console.timeEnd(`[${clipId}] 1-trim-watermark`);
+    console.timeEnd(`[${clipId}] 2-trim-watermark`);
 
-    console.time(`[${clipId}] 2-gif-palette`);
-    // 2) Watermarked GIF — reduced fps/scale so Reddit animates it in the feed
-    await execFileAsync("ffmpeg", [
-      "-y",
-      "-i", mp4Out,
-      "-vf", "fps=12,scale=480:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
-      paletteOut,
-    ]);
-    console.timeEnd(`[${clipId}] 2-gif-palette`);
-
+    // GIF: step down through quality tiers until the file is safely under
+    // Reddit's practical size ceiling. This loop is what guarantees the
+    // direct GIF link actually plays when pasted into Reddit.
     console.time(`[${clipId}] 3-gif-encode`);
-    await execFileAsync("ffmpeg", [
-      "-y",
-      "-i", mp4Out,
-      "-i", paletteOut,
-      "-lavfi", "fps=12,scale=480:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
-      "-loop", "0",
-      gifOut,
-    ]);
+    let gifSize = Infinity;
+    for (let i = 0; i < GIF_TIERS.length; i++) {
+      const tier = GIF_TIERS[i];
+      await encodeGif(mp4Out, paletteOut, gifOut, tier.width, tier.fps);
+      gifSize = (await stat(gifOut)).size;
+      console.log(
+        `[${clipId}] tier ${i} (${tier.width}px@${tier.fps}fps): ${(gifSize / 1024 / 1024).toFixed(2)}MB`
+      );
+      if (gifSize <= MAX_GIF_BYTES) break;
+    }
     console.timeEnd(`[${clipId}] 3-gif-encode`);
 
     console.time(`[${clipId}] 4-thumbnail`);
-    // 3) Watermarked static thumbnail
     await execFileAsync("ffmpeg", [
       "-y",
       "-i", mp4Out,
@@ -117,63 +169,24 @@ export async function POST(req: NextRequest) {
     ]);
     console.timeEnd(`[${clipId}] 4-thumbnail`);
 
-    // Downscale if GIF too large
-    const fs = await import("fs/promises");
-    let gifStat = await fs.stat(gifOut);
-    const MAX_GIF_BYTES = 15 * 1024 * 1024;
-    console.log(`[${clipId}] GIF size: ${(gifStat.size / 1024 / 1024).toFixed(2)}MB`);
-
-    if (gifStat.size > MAX_GIF_BYTES) {
-      console.time(`[${clipId}] 5-gif-fallback-downscale`);
-      await execFileAsync("ffmpeg", [
-        "-y",
-        "-i", mp4Out,
-        "-vf", "fps=10,scale=360:-1:flags=lanczos,palettegen=max_colors=256:stats_mode=diff",
-        paletteOut,
-      ]);
-      await execFileAsync("ffmpeg", [
-        "-y",
-        "-i", mp4Out,
-        "-i", paletteOut,
-        "-lavfi", "fps=10,scale=360:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=floyd_steinberg",
-        "-loop", "0",
-        gifOut,
-      ]);
-      gifStat = await fs.stat(gifOut);
-      console.timeEnd(`[${clipId}] 5-gif-fallback-downscale`);
-    }
-
-    console.time(`[${clipId}] 6-probe`);
-    // Get final dimensions for OG tags
-    const { stdout: probeOut } = await execFileAsync("ffprobe", [
-      "-v", "error",
-      "-select_streams", "v:0",
-      "-show_entries", "stream=width,height",
-      "-of", "json",
-      mp4Out,
-    ]);
-    console.timeEnd(`[${clipId}] 6-probe`);
-    const probe = JSON.parse(probeOut);
-    const width = probe.streams?.[0]?.width ?? 480;
-    const height = probe.streams?.[0]?.height ?? 270;
-
-    console.time(`[${clipId}] 7-read-local-files`);
-    // Upload all three outputs to R2
+    console.time(`[${clipId}] 5-read-local-files`);
     const [mp4Buf, gifBuf, thumbBuf] = await Promise.all([
       readFile(mp4Out),
       readFile(gifOut),
       readFile(thumbOut),
     ]);
-    console.timeEnd(`[${clipId}] 7-read-local-files`);
-    console.log(`[${clipId}] mp4: ${(mp4Buf.length / 1024 / 1024).toFixed(2)}MB, gif: ${(gifBuf.length / 1024 / 1024).toFixed(2)}MB`);
+    console.timeEnd(`[${clipId}] 5-read-local-files`);
+    console.log(
+      `[${clipId}] mp4: ${(mp4Buf.length / 1024 / 1024).toFixed(2)}MB, gif: ${(gifBuf.length / 1024 / 1024).toFixed(2)}MB`
+    );
 
-    console.time(`[${clipId}] 8-r2-upload`);
+    console.time(`[${clipId}] 6-r2-upload`);
     const [mp4Url, gifUrl, thumbUrl] = await Promise.all([
       uploadToR2(`clips/${clipId}.mp4`, mp4Buf, "video/mp4"),
       uploadToR2(`clips/${clipId}.gif`, gifBuf, "image/gif"),
       uploadToR2(`clips/${clipId}.jpg`, thumbBuf, "image/jpeg"),
     ]);
-    console.timeEnd(`[${clipId}] 8-r2-upload`);
+    console.timeEnd(`[${clipId}] 6-r2-upload`);
 
     // Clean up local work files
     await Promise.all([
@@ -205,7 +218,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Clip generation error:", err);
-    // Best-effort cleanup of any local files left behind on failure
     await Promise.all(
       [mp4Out, gifOut, thumbOut, paletteOut]
         .filter(Boolean)

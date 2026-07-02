@@ -38,6 +38,11 @@ export async function generateMetadata({
       ],
       images: [
         {
+          url: clip.thumbUrl,
+          width: clip.width,
+          height: clip.height,
+        },
+        {
           url: gifAbsUrl,
           width: clip.width,
           height: clip.height,
@@ -47,7 +52,7 @@ export async function generateMetadata({
     twitter: {
       card: "player",
       title,
-      images: [gifAbsUrl],
+      images: [clip.thumbUrl],
       players: [
         {
           playerUrl: mp4AbsUrl,
@@ -100,8 +105,9 @@ export default async function ClipPage({
         </div>
 
         <p className="text-xs text-[#5a5a62] mt-6 leading-relaxed">
-          Post the page link on Reddit — it'll pull this watermarked GIF as the preview.
-          Clicking the preview brings people back here.
+          Paste the GIF link on Reddit — it posts as a native image and loops automatically,
+          no click needed. Use the page link everywhere else (Discord, Twitter, forums) — it
+          pulls a preview card that links back here.
         </p>
       </div>
     </main>
