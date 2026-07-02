@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import posthog from "posthog-js";
 import type { ClipRecord } from "@/lib/clipStore";
 
 const PAGE_SIZE = 30;
@@ -28,7 +29,13 @@ export function ClipGallery({ clips }: { clips: ClipRecord[] }) {
       {hasMore && (
         <div className="flex justify-center mt-8">
           <button
-            onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+            onClick={() => {
+              setVisibleCount((n) => n + PAGE_SIZE);
+              posthog.capture("clip_gallery_load_more", {
+                visible_count: visibleCount,
+                total_clips: clips.length,
+              });
+            }}
             className="text-sm font-medium px-5 py-2.5 rounded-lg border border-[#26262c] hover:border-[#3a3a42] transition-colors"
           >
             load more ({clips.length - visibleCount} remaining)

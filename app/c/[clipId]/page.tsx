@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getClip } from "@/lib/clipStore";
 import { notFound } from "next/navigation";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -74,6 +75,16 @@ export default async function ClipPage({
   const clip = await getClip(clipId);
 
   if (!clip) notFound();
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: clip.clipId,
+    event: "clip_page_viewed",
+    properties: {
+      clip_id: clip.clipId,
+      has_caption: clip.caption.length > 0,
+    },
+  });
 
   const gifAbsUrl = clip.gifUrl;
 

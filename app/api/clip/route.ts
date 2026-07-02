@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { uploadToR2 } from "@/lib/r2";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const execFileAsync = promisify(execFile);
 
@@ -206,6 +207,20 @@ export async function POST(req: NextRequest) {
       width,
       height,
       createdAt: new Date().toISOString(),
+    });
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: clipId,
+      event: "clip_created",
+      properties: {
+        clip_id: clipId,
+        duration_s: parseFloat(duration.toFixed(2)),
+        width,
+        height,
+        has_caption: (caption ?? "").length > 0,
+        gif_size_mb: parseFloat((gifSize / 1024 / 1024).toFixed(2)),
+      },
     });
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import posthog from "posthog-js";
 
 type Stage = "idle" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -42,6 +43,11 @@ export default function UploadPage() {
     setStage("uploading");
     setClip(null);
 
+    posthog.capture("video_selected", {
+      file_type: file.type,
+      file_size_mb: parseFloat((file.size / 1024 / 1024).toFixed(2)),
+    });
+
     const formData = new FormData();
     formData.append("video", file);
 
@@ -50,6 +56,8 @@ export default function UploadPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        posthog.capture("video_upload_failed", { error: data.error || "Upload failed" });
+        posthog.captureException(new Error(data.error || "Upload failed"));
         setError(data.error || "Upload failed");
         setStage("error");
         return;
@@ -60,7 +68,14 @@ export default function UploadPage() {
       setStart(0);
       setEnd(clipLen);
       setStage("trimming");
-    } catch {
+      posthog.capture("video_upload_completed", {
+        duration_s: data.duration,
+        width: data.width,
+        height: data.height,
+      });
+    } catch (err) {
+      posthog.capture("video_upload_failed", { error: "network_error" });
+      posthog.captureException(err);
       setError("Upload failed. Check your connection and try again.");
       setStage("error");
     }
@@ -80,6 +95,12 @@ export default function UploadPage() {
     setStage("generating");
     setError("");
 
+    const clipDuration = parseFloat((end - start).toFixed(2));
+    posthog.capture("clip_generation_started", {
+      clip_duration_s: clipDuration,
+      has_caption: caption.trim().length > 0,
+    });
+
     try {
       const res = await fetch("/api/clip", {
         method: "POST",
@@ -89,6 +110,8 @@ export default function UploadPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        posthog.capture("clip_generation_failed", { error: data.error || "Clip generation failed" });
+        posthog.captureException(new Error(data.error || "Clip generation failed"));
         setError(data.error || "Clip generation failed");
         setStage("error");
         return;
@@ -96,7 +119,14 @@ export default function UploadPage() {
 
       setClip(data);
       setStage("done");
-    } catch {
+      posthog.capture("clip_generation_completed", {
+        clip_id: data.clipId,
+        clip_duration_s: clipDuration,
+        has_caption: caption.trim().length > 0,
+      });
+    } catch (err) {
+      posthog.capture("clip_generation_failed", { error: "network_error" });
+      posthog.captureException(err);
       setError("Clip generation failed. Try a shorter range.");
       setStage("error");
     }
@@ -429,6 +459,9 @@ function ResultPanel({ clip, onReset }: { clip: ClipResult; onReset: () => void 
     navigator.clipboard.writeText(value);
     setCopied(label);
     setTimeout(() => setCopied(null), 1500);
+    posthog.capture(label === "page" ? "clip_page_link_copied" : "clip_gif_link_copied", {
+      clip_id: clip.clipId,
+    });
   };
 
   return (
