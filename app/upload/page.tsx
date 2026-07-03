@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import posthog from "posthog-js";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-type Stage = "idle" | "uploading" | "trimming" | "generating" | "done" | "error";
+type Stage = "idle" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
 interface UploadResult {
-  id: string;
-  filename: string;
+  videoId: string;
   duration: number;
   width: number;
   height: number;
@@ -25,8 +24,12 @@ interface ClipResult {
 
 const MAX_CLIP_SECONDS = 15;
 
-export default function UploadPage() {
-  const [stage, setStage] = useState<Stage>("idle");
+function UploadPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const existingVideoId = searchParams.get("videoId");
+
+  const [stage, setStage] = useState<Stage>(existingVideoId ? "loading" : "idle");
   const [error, setError] = useState("");
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [clip, setClip] = useState<ClipResult | null>(null);
@@ -38,48 +41,69 @@ export default function UploadPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = useCallback(async (file: File) => {
-    setError("");
-    setStage("uploading");
-    setClip(null);
+  // Arrived from a video's watch page ("make a clip") — load that video and
+  // go straight to trimming instead of showing the drop zone.
+  useEffect(() => {
+    if (!existingVideoId) return;
 
-    posthog.capture("video_selected", {
-      file_type: file.type,
-      file_size_mb: parseFloat((file.size / 1024 / 1024).toFixed(2)),
-    });
+    (async () => {
+      try {
+        const res = await fetch(`/api/video/${existingVideoId}`);
+        const data = await res.json();
 
-    const formData = new FormData();
-    formData.append("video", file);
+        if (!res.ok) {
+          setError(data.error || "Video not found");
+          setStage("error");
+          return;
+        }
 
-    try {
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-
-      if (!res.ok) {
-        posthog.capture("video_upload_failed", { error: data.error || "Upload failed" });
-        posthog.captureException(new Error(data.error || "Upload failed"));
-        setError(data.error || "Upload failed");
+        setUpload({
+          videoId: data.videoId,
+          duration: data.duration,
+          width: data.width,
+          height: data.height,
+          previewUrl: data.videoUrl,
+        });
+        const clipLen = Math.min(MAX_CLIP_SECONDS, data.duration);
+        setStart(0);
+        setEnd(clipLen);
+        setStage("trimming");
+      } catch {
+        setError("Couldn't load that video. Check your connection and try again.");
         setStage("error");
-        return;
       }
+    })();
+  }, [existingVideoId]);
 
-      setUpload(data);
-      const clipLen = Math.min(MAX_CLIP_SECONDS, data.duration);
-      setStart(0);
-      setEnd(clipLen);
-      setStage("trimming");
-      posthog.capture("video_upload_completed", {
-        duration_s: data.duration,
-        width: data.width,
-        height: data.height,
-      });
-    } catch (err) {
-      posthog.capture("video_upload_failed", { error: "network_error" });
-      posthog.captureException(err);
-      setError("Upload failed. Check your connection and try again.");
-      setStage("error");
-    }
-  }, []);
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      setError("");
+      setStage("uploading");
+      setClip(null);
+
+      const formData = new FormData();
+      formData.append("video", file);
+
+      try {
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || "Upload failed");
+          setStage("error");
+          return;
+        }
+
+        // Uploading publishes the video — it's watchable immediately.
+        // Clip-making happens from the watch page as a separate step.
+        router.push(`/v/${data.videoId}`);
+      } catch {
+        setError("Upload failed. Check your connection and try again.");
+        setStage("error");
+      }
+    },
+    [router]
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -95,23 +119,15 @@ export default function UploadPage() {
     setStage("generating");
     setError("");
 
-    const clipDuration = parseFloat((end - start).toFixed(2));
-    posthog.capture("clip_generation_started", {
-      clip_duration_s: clipDuration,
-      has_caption: caption.trim().length > 0,
-    });
-
     try {
       const res = await fetch("/api/clip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: upload.filename, start, end, caption }),
+        body: JSON.stringify({ videoId: upload.videoId, start, end, caption }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        posthog.capture("clip_generation_failed", { error: data.error || "Clip generation failed" });
-        posthog.captureException(new Error(data.error || "Clip generation failed"));
         setError(data.error || "Clip generation failed");
         setStage("error");
         return;
@@ -119,17 +135,19 @@ export default function UploadPage() {
 
       setClip(data);
       setStage("done");
-      posthog.capture("clip_generation_completed", {
-        clip_id: data.clipId,
-        clip_duration_s: clipDuration,
-        has_caption: caption.trim().length > 0,
-      });
-    } catch (err) {
-      posthog.capture("clip_generation_failed", { error: "network_error" });
-      posthog.captureException(err);
+    } catch {
       setError("Clip generation failed. Try a shorter range.");
       setStage("error");
     }
+  };
+
+  // "make another clip" — same video, pick a new range. There's no file to
+  // re-pick, so this goes back to trimming rather than resetting to idle.
+  const backToTrimming = () => {
+    setClip(null);
+    setCaption("");
+    setError("");
+    setStage("trimming");
   };
 
   const reset = () => {
@@ -148,7 +166,7 @@ export default function UploadPage() {
           clip<span className="text-[#ff3d6e]">drop</span>
         </a>
         <a href="/" className="text-xs text-[#5a5a62] hover:text-[#8a8a92] transition-colors">
-          ← browse clips
+          ← browse videos
         </a>
       </header>
 
@@ -157,10 +175,12 @@ export default function UploadPage() {
           <DropZone onDrop={handleDrop} onSelect={handleFileSelect} fileInputRef={fileInputRef} />
         )}
 
-        {stage === "uploading" && (
+        {(stage === "loading" || stage === "uploading") && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Spinner />
-            <p className="text-sm text-[#8a8a92]">uploading video…</p>
+            <p className="text-sm text-[#8a8a92]">
+              {stage === "uploading" ? "uploading video…" : "loading video…"}
+            </p>
           </div>
         )}
 
@@ -181,7 +201,9 @@ export default function UploadPage() {
           />
         )}
 
-        {stage === "done" && clip && <ResultPanel clip={clip} onReset={reset} />}
+        {stage === "done" && clip && (
+          <ResultPanel clip={clip} videoId={upload?.videoId} onMakeAnother={backToTrimming} />
+        )}
 
         {stage === "error" && (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
@@ -196,6 +218,14 @@ export default function UploadPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={null}>
+      <UploadPageInner />
+    </Suspense>
   );
 }
 
@@ -449,7 +479,15 @@ function TrimSlider({
   );
 }
 
-function ResultPanel({ clip, onReset }: { clip: ClipResult; onReset: () => void }) {
+function ResultPanel({
+  clip,
+  videoId,
+  onMakeAnother,
+}: {
+  clip: ClipResult;
+  videoId?: string;
+  onMakeAnother: () => void;
+}) {
   const [copied, setCopied] = useState<string | null>(null);
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
   const pageLink = `${siteUrl}${clip.pageUrl}`;
@@ -459,9 +497,6 @@ function ResultPanel({ clip, onReset }: { clip: ClipResult; onReset: () => void 
     navigator.clipboard.writeText(value);
     setCopied(label);
     setTimeout(() => setCopied(null), 1500);
-    posthog.capture(label === "page" ? "clip_page_link_copied" : "clip_gif_link_copied", {
-      clip_id: clip.clipId,
-    });
   };
 
   return (
@@ -483,17 +518,19 @@ function ResultPanel({ clip, onReset }: { clip: ClipResult; onReset: () => void 
 
       <div className="flex flex-col gap-3">
         <button
-          onClick={onReset}
+          onClick={onMakeAnother}
           className="w-full rounded-lg border border-[#26262c] text-sm font-medium py-3 hover:border-[#3a3a42] transition-colors"
         >
           make another clip
         </button>
-        <a
-          href="/"
-          className="w-full text-center rounded-lg text-sm font-medium py-3 text-[#8a8a92] hover:text-[#f2f2f0] transition-colors"
-        >
-          browse all clips →
-        </a>
+        {videoId && (
+          <a
+            href={`/v/${videoId}`}
+            className="w-full text-center rounded-lg text-sm font-medium py-3 text-[#8a8a92] hover:text-[#f2f2f0] transition-colors"
+          >
+            back to video →
+          </a>
+        )}
       </div>
     </div>
   );

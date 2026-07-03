@@ -1,14 +1,14 @@
-import { listClips } from "@/lib/clipStore";
-import { ClipGallery } from "./ClipGallery";
+import { listVideos } from "@/lib/videoStore";
+import { VideoFeed } from "./VideoFeed";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const clips = await listClips();
+  const videos = await listVideos();
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
-      <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-10">
+      <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-20">
         <a href="/" className="font-bold tracking-tight text-lg">
           clip<span className="text-[#ff3d6e]">drop</span>
         </a>
@@ -16,27 +16,61 @@ export default async function HomePage() {
           href="/upload"
           className="text-sm font-medium px-3.5 py-1.5 rounded-lg bg-[#ff3d6e] text-white hover:bg-[#ff5580] transition-colors"
         >
-          make a clip
+          upload
         </a>
       </header>
 
-      <section className="px-6 pt-10 pb-8 max-w-5xl mx-auto text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">
-          Clip it. Loop it. <span className="text-[#ff3d6e]">Drop it.</span>
-        </h1>
-        <p className="text-[#8a8a92] text-sm sm:text-base max-w-md mx-auto">
-          Trim any video into a short looping GIF, watermarked and ready to share.
-        </p>
-        {clips.length > 0 && (
-          <p className="text-[#4a4a52] text-xs mt-4">
-            {clips.length.toLocaleString()} clip{clips.length === 1 ? "" : "s"} dropped so far
-          </p>
-        )}
-      </section>
+      <div className="flex flex-col lg:flex-row">
+        {/* Left nav — real links, not blank */}
+        <nav
+          className="hidden lg:flex lg:flex-col gap-1 px-4 py-6 shrink-0 border-r border-[#1c1c20]"
+          style={{ width: 240 }}
+        >
+          <a
+            href="/"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#8a8a92] hover:bg-[#141417] hover:text-[#f2f2f0] transition-colors"
+          >
+            <HomeIcon />
+            Home
+          </a>
+          <a
+            href="/upload"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#8a8a92] hover:bg-[#141417] hover:text-[#f2f2f0] transition-colors"
+          >
+            <UploadIcon />
+            Upload
+          </a>
+        </nav>
 
-      <section className="px-6 pb-20 max-w-6xl mx-auto">
-        <ClipGallery clips={clips} />
-      </section>
+        {/* Center feed — width is inline-styled inside VideoFeed itself */}
+        <div className="flex-1 flex justify-center px-4 sm:px-6 py-8">
+          <div style={{ width: "100%", maxWidth: 520 }}>
+            <VideoFeed videos={videos} />
+          </div>
+        </div>
+
+        {/* Right gutter — ad slot goes here. Left empty on purpose. */}
+        <div className="hidden lg:block shrink-0" style={{ width: 240 }} />
+      </div>
     </main>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
   );
 }

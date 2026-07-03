@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readFile } from "fs/promises";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { uploadToR2 } from "@/lib/r2";
+import { saveVideo } from "@/lib/videoStore";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,8 +40,8 @@ export async function POST(req: NextRequest) {
     const filename = `${id}${ext}`;
     const filepath = path.join(UPLOAD_DIR, filename);
 
-    const bytes = await file.arrayBuffer();
-    await writeFile(filepath, Buffer.from(bytes));
+    const bytes = Buffer.from(await file.arrayBuffer());
+    await writeFile(filepath, bytes);
 
     // Probe video duration + dimensions with ffprobe
     const { stdout } = await execFileAsync("ffprobe", [
@@ -61,13 +63,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not read video duration" }, { status: 400 });
     }
 
+    // Grab a poster frame for the watch page / gallery thumbnail
+    const thumbPath = path.join(UPLOAD_DIR, `${id}.jpg`);
+    await execFileAsync("ffmpeg", [
+      "-y",
+      "-i", filepath,
+      "-ss", String(Math.min(1, duration / 2)),
+      "-frames:v", "1",
+      "-q:v", "2",
+      thumbPath,
+    ]);
+    const thumbBuf = await readFile(thumbPath);
+
+    // Persist the full video + poster to R2 so it's actually watchable — the
+    // local copy in UPLOAD_DIR is ephemeral (os.tmpdir()) and not something
+    // any other request or a later visit can rely on still being there.
+    const videoId = randomUUID();
+    const title = path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
+
+    const [videoUrl, thumbUrl] = await Promise.all([
+      uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4"),
+      uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg"),
+    ]);
+
+    await saveVideo({
+      videoId,
+      title,
+      videoUrl,
+      thumbUrl,
+      width,
+      height,
+      duration,
+      createdAt: new Date().toISOString(),
+    });
+
     return NextResponse.json({
-      id,
-      filename,
+      videoId,
       duration,
       width,
       height,
-      previewUrl: `/api/source/${filename}`,
+      previewUrl: videoUrl,
     });
   } catch (err) {
     console.error("Upload error:", err);
