@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
       width,
       height,
       duration,
+      views: 0,
       createdAt: new Date().toISOString(),
     });
 

@@ -20,10 +20,12 @@ export function VideoFeed({ videos }: { videos: VideoRecord[] }) {
 function FeedCard({ video }: { video: VideoRecord }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const hasCountedView = useRef(false);
     const [muted, setMuted] = useState(true);
 
     // Only the card mostly in view plays — like a TikTok/Reels feed, not
-    // every video on the page playing at once.
+    // every video on the page playing at once. Counts one view the first
+    // time it autoplays, not every time you scroll back over it.
     useEffect(() => {
         const videoEl = videoRef.current;
         const container = containerRef.current;
@@ -33,6 +35,10 @@ function FeedCard({ video }: { video: VideoRecord }) {
             ([entry]) => {
                 if (entry.isIntersecting) {
                     videoEl.play().catch(() => { });
+                    if (!hasCountedView.current) {
+                        hasCountedView.current = true;
+                        fetch(`/api/video/${video.videoId}/view`, { method: "POST" }).catch(() => { });
+                    }
                 } else {
                     videoEl.pause();
                 }
@@ -42,11 +48,9 @@ function FeedCard({ video }: { video: VideoRecord }) {
 
         observer.observe(container);
         return () => observer.disconnect();
-    }, []);
+    }, [video.videoId]);
 
     return (
-        // width/aspect-ratio are inline styles on purpose — they're the exact
-        // thing that wasn't rendering as Tailwind arbitrary-value classes.
         <div
             ref={containerRef}
             className="relative mx-auto rounded-xl overflow-hidden border border-[#26262c] bg-black"
@@ -62,13 +66,21 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 className="w-full h-full object-cover"
             />
 
-            <button
-                onClick={() => setMuted((m) => !m)}
-                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center hover:bg-black/70 transition-colors"
-                aria-label={muted ? "Unmute" : "Mute"}
-            >
-                {muted ? <MutedIcon /> : <UnmutedIcon />}
-            </button>
+            <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-full bg-black/50 backdrop-blur">
+                    <EyeIcon />
+                    <span className="text-[10px] font-medium text-white leading-none">
+                        {formatCount(video.views ?? 0)}
+                    </span>
+                </div>
+                <button
+                    onClick={() => setMuted((m) => !m)}
+                    className="w-9 h-9 rounded-full bg-black/50 backdrop-blur flex items-center justify-center hover:bg-black/70 transition-colors"
+                    aria-label={muted ? "Unmute" : "Mute"}
+                >
+                    {muted ? <MutedIcon /> : <UnmutedIcon />}
+                </button>
+            </div>
 
             <a
                 href={`/v/${video.videoId}`}
@@ -111,6 +123,15 @@ function EmptyState() {
     );
 }
 
+function EyeIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+        </svg>
+    );
+}
+
 function MutedIcon() {
     return (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -129,6 +150,12 @@ function UnmutedIcon() {
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
         </svg>
     );
+}
+
+function formatCount(n: number): string {
+    if (n < 1000) return String(n);
+    if (n < 1000000) return `${(n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0)}K`;
+    return `${(n / 1000000).toFixed(1)}M`;
 }
 
 function timeAgo(iso: string) {

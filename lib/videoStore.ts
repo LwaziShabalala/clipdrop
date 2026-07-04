@@ -12,6 +12,7 @@ export interface VideoRecord {
   width: number;
   height: number;
   duration: number;
+  views: number;
   createdAt: string;
 }
 
@@ -48,4 +49,13 @@ export async function deleteVideo(videoId: string) {
   const db = await readDb();
   const filtered = db.filter((v) => v.videoId !== videoId);
   await writeDb(filtered);
+}
+
+export async function incrementViews(videoId: string): Promise<number> {
+  const db = await readDb();
+  const video = db.find((v) => v.videoId === videoId);
+  if (!video) return 0;
+  video.views = (video.views ?? 0) + 1;
+  await writeDb(db);
+  return video.views;
 }

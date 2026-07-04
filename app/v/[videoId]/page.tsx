@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getVideo } from "@/lib/videoStore";
+import { getVideo, incrementViews } from "@/lib/videoStore";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
 
@@ -45,6 +45,10 @@ export default async function WatchPage({
 
     if (!video) notFound();
 
+    // Counts once per visit to this page. generateMetadata above also loads
+    // the video but never calls this, so it doesn't double-count.
+    const views = await incrementViews(videoId);
+
     return (
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
             <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-20">
@@ -80,7 +84,9 @@ export default async function WatchPage({
                 <div className="flex items-start justify-between gap-4 mt-5">
                     <div>
                         <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
-                        <p className="text-xs text-[#5a5a62] mt-1">{timeAgo(video.createdAt)}</p>
+                        <p className="text-xs text-[#5a5a62] mt-1">
+                            {formatCount(views)} views · {timeAgo(video.createdAt)}
+                        </p>
                     </div>
                     <a
                         href={`/upload?videoId=${video.videoId}`}
@@ -96,6 +102,12 @@ export default async function WatchPage({
             </div>
         </main>
     );
+}
+
+function formatCount(n: number): string {
+    if (n < 1000) return String(n);
+    if (n < 1000000) return `${(n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0)}K`;
+    return `${(n / 1000000).toFixed(1)}M`;
 }
 
 function timeAgo(iso: string) {

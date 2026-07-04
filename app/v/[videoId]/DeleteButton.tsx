@@ -10,20 +10,12 @@ export function DeleteButton({ videoId }: { videoId: string }) {
     const handleDelete = async () => {
         if (!confirm("Delete this video? This can't be undone.")) return;
 
-        const secret = prompt("Enter the delete passphrase:");
-        if (!secret) return;
-
         setDeleting(true);
         try {
-            const res = await fetch(`/api/video/${videoId}`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ secret }),
-            });
+            const res = await fetch(`/api/video/${videoId}`, { method: "DELETE" });
 
             if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                alert(data.error || "Delete failed");
+                alert("Delete failed");
                 setDeleting(false);
                 return;
             }

@@ -16,21 +16,11 @@ export async function GET(
   return NextResponse.json(video);
 }
 
-// Stopgap auth: a shared passphrase, not real per-user ownership. Once
-// accounts exist, swap this for "only the uploader (or the clipdrop admin
-// account) can delete." Set DELETE_SECRET in .env.local to enable this.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ videoId: string }> }
 ) {
   const { videoId } = await params;
-
-  const body = await req.json().catch(() => ({ secret: "" }));
-  const secret = body?.secret ?? "";
-
-  if (!process.env.DELETE_SECRET || secret !== process.env.DELETE_SECRET) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 401 });
-  }
 
   const video = await getVideo(videoId);
   if (!video) {
