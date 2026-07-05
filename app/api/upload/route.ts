@@ -5,6 +5,7 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { currentUser } from "@clerk/nextjs/server";
 import { uploadToR2 } from "@/lib/r2";
 import { saveVideo } from "@/lib/videoStore";
 
@@ -17,6 +18,13 @@ const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
   try {
+    // /upload is already protected by proxy.ts, but checking again here too
+    // means this endpoint is safe even if it's ever called some other way.
+    const user = await currentUser();
+    if (!user) {
+      return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("video") as File | null;
 
@@ -95,6 +103,8 @@ export async function POST(req: NextRequest) {
       height,
       duration,
       views: 0,
+      uploaderName: user.username ?? "Anonymous",
+      uploaderImageUrl: user.imageUrl,
       createdAt: new Date().toISOString(),
     });
 

@@ -13,6 +13,8 @@ export interface VideoRecord {
   height: number;
   duration: number;
   views: number;
+  uploaderName?: string;
+  uploaderImageUrl?: string;
   createdAt: string;
 }
 

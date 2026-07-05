@@ -83,6 +83,19 @@ export default async function WatchPage({
 
                 <div className="flex items-start justify-between gap-4 mt-5">
                     <div>
+                        {video.uploaderName && (
+                            <div className="flex items-center gap-2 mb-2">
+                                {video.uploaderImageUrl && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={video.uploaderImageUrl}
+                                        alt={video.uploaderName}
+                                        className="w-6 h-6 rounded-full object-cover"
+                                    />
+                                )}
+                                <span className="text-sm font-medium text-[#d4d4d8]">{video.uploaderName}</span>
+                            </div>
+                        )}
                         <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
                         <p className="text-xs text-[#5a5a62] mt-1">
                             {formatCount(views)} views · {timeAgo(video.createdAt)}

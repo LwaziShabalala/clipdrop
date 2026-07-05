@@ -86,6 +86,19 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 href={`/v/${video.videoId}`}
                 className="absolute bottom-0 left-0 right-0 z-10 px-4 pt-10 pb-3 pr-24 bg-gradient-to-t from-black/80 to-transparent"
             >
+                {video.uploaderName && (
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                        {video.uploaderImageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={video.uploaderImageUrl}
+                                alt={video.uploaderName}
+                                className="w-5 h-5 rounded-full object-cover"
+                            />
+                        )}
+                        <span className="text-xs font-medium text-[#d4d4d8]">{video.uploaderName}</span>
+                    </div>
+                )}
                 <p className="text-sm font-medium text-[#f2f2f0] truncate">{video.title}</p>
                 <p className="text-[11px] text-[#c8c8cc]/70 mt-0.5">{timeAgo(video.createdAt)}</p>
             </a>
