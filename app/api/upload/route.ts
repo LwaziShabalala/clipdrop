@@ -5,7 +5,7 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { uploadToR2 } from "@/lib/r2";
 import { saveVideo } from "@/lib/videoStore";
 
@@ -18,12 +18,18 @@ const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
   try {
-    // /upload is already protected by proxy.ts, but checking again here too
-    // means this endpoint is safe even if it's ever called some other way.
-    const user = await currentUser();
-    if (!user) {
+    // Gate on auth() — a fast, local session check. currentUser() below
+    // makes an actual network call to Clerk's API for profile details, which
+    // can occasionally fail even for a genuinely signed-in user, so it's
+    // only used for the nice-to-have name/photo, never as the access check.
+    const { isAuthenticated } = await auth();
+    if (!isAuthenticated) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
+
+    const user = await currentUser();
+    const uploaderName = user?.username ?? "Anonymous";
+    const uploaderImageUrl = user?.imageUrl;
 
     const formData = await req.formData();
     const file = formData.get("video") as File | null;
@@ -103,8 +109,8 @@ export async function POST(req: NextRequest) {
       height,
       duration,
       views: 0,
-      uploaderName: user.username ?? "Anonymous",
-      uploaderImageUrl: user.imageUrl,
+      uploaderName,
+      uploaderImageUrl,
       createdAt: new Date().toISOString(),
     });
 

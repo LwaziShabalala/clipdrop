@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, readFile, unlink, stat } from "fs/promises";
+import { mkdir, readFile, unlink, stat, writeFile } from "fs/promises";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
@@ -51,6 +51,7 @@ async function encodeGif(
 }
 
 export async function POST(req: NextRequest) {
+  let sourcePath = "";
   let mp4Out = "";
   let gifOut = "";
   let thumbOut = "";
@@ -92,14 +93,29 @@ export async function POST(req: NextRequest) {
     await mkdir(WORK_DIR, { recursive: true });
 
     const clipId = randomUUID();
+    sourcePath = path.join(WORK_DIR, `${clipId}_source.mp4`);
     mp4Out = path.join(WORK_DIR, `${clipId}.mp4`);
     gifOut = path.join(WORK_DIR, `${clipId}.gif`);
     thumbOut = path.join(WORK_DIR, `${clipId}.jpg`);
     paletteOut = path.join(WORK_DIR, `${clipId}_palette.png`);
 
-    // The video's dimensions are already stored on its VideoRecord from
-    // upload time — no need to re-probe. Trimming/watermarking don't change
-    // frame size, so these are also the clip's final output dimensions.
+    // Download the source video locally before running ffmpeg on it.
+    // Feeding ffmpeg the remote R2 URL directly can hang indefinitely — MP4s
+    // that aren't "faststart" encoded (common for phone recordings and
+    // Twitter-downloaded clips) store their index at the END of the file,
+    // so ffmpeg has to fetch that over the network before it can decode
+    // anything. That's what was getting the process killed after running
+    // for a while producing zero frames.
+    console.time(`[${clipId}] 1-download-source`);
+    const sourceRes = await fetch(video.videoUrl);
+    if (!sourceRes.ok) {
+      throw new Error(`Failed to download source video (${sourceRes.status})`);
+    }
+    await writeFile(sourcePath, Buffer.from(await sourceRes.arrayBuffer()));
+    console.timeEnd(`[${clipId}] 1-download-source`);
+
+    // Video's real dimensions are already stored on its VideoRecord — no
+    // need to re-probe. Trimming/watermarking don't change frame size.
     const width = video.width;
     const height = video.height;
 
@@ -108,15 +124,11 @@ export async function POST(req: NextRequest) {
     const watermarkFilter =
       `[1:v]scale=${watermarkWidth}:-1[wm];[0:v][wm]overlay=W-w-${margin}:H-h-${margin}:format=auto`;
 
-    // ffmpeg reads the source straight from its R2 URL. The video is already
-    // hosted there, so clip generation doesn't depend on a local temp file
-    // still existing — important once "make a clip" can happen any time
-    // after upload, not just immediately after.
-    console.time(`[${clipId}] 1-trim-watermark`);
+    console.time(`[${clipId}] 2-trim-watermark`);
     await execFileAsync("ffmpeg", [
       "-y",
       "-ss", String(startTime),
-      "-i", video.videoUrl,
+      "-i", sourcePath,
       "-i", WATERMARK_PATH,
       "-t", String(duration),
       "-filter_complex", watermarkFilter,
@@ -128,11 +140,11 @@ export async function POST(req: NextRequest) {
       "-movflags", "+faststart",
       mp4Out,
     ]);
-    console.timeEnd(`[${clipId}] 1-trim-watermark`);
+    console.timeEnd(`[${clipId}] 2-trim-watermark`);
 
     // GIF: step down through quality tiers until the file is safely under
     // Reddit's practical size ceiling.
-    console.time(`[${clipId}] 2-gif-encode`);
+    console.time(`[${clipId}] 3-gif-encode`);
     let gifSize = Infinity;
     for (let i = 0; i < GIF_TIERS.length; i++) {
       const tier = GIF_TIERS[i];
@@ -143,9 +155,9 @@ export async function POST(req: NextRequest) {
       );
       if (gifSize <= MAX_GIF_BYTES) break;
     }
-    console.timeEnd(`[${clipId}] 2-gif-encode`);
+    console.timeEnd(`[${clipId}] 3-gif-encode`);
 
-    console.time(`[${clipId}] 3-thumbnail`);
+    console.time(`[${clipId}] 4-thumbnail`);
     await execFileAsync("ffmpeg", [
       "-y",
       "-i", mp4Out,
@@ -153,7 +165,7 @@ export async function POST(req: NextRequest) {
       "-q:v", "2",
       thumbOut,
     ]);
-    console.timeEnd(`[${clipId}] 3-thumbnail`);
+    console.timeEnd(`[${clipId}] 4-thumbnail`);
 
     const [mp4Buf, gifBuf, thumbBuf] = await Promise.all([
       readFile(mp4Out),
@@ -161,15 +173,17 @@ export async function POST(req: NextRequest) {
       readFile(thumbOut),
     ]);
 
-    console.time(`[${clipId}] 4-r2-upload`);
+    console.time(`[${clipId}] 5-r2-upload`);
     const [mp4Url, gifUrl, thumbUrl] = await Promise.all([
       uploadToR2(`clips/${clipId}.mp4`, mp4Buf, "video/mp4"),
       uploadToR2(`clips/${clipId}.gif`, gifBuf, "image/gif"),
       uploadToR2(`clips/${clipId}.jpg`, thumbBuf, "image/jpeg"),
     ]);
-    console.timeEnd(`[${clipId}] 4-r2-upload`);
+    console.timeEnd(`[${clipId}] 5-r2-upload`);
 
+    // Clean up local work files, including the downloaded source
     await Promise.all([
+      unlink(sourcePath).catch(() => {}),
       unlink(mp4Out).catch(() => {}),
       unlink(gifOut).catch(() => {}),
       unlink(thumbOut).catch(() => {}),
@@ -198,7 +212,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Clip generation error:", err);
     await Promise.all(
-      [mp4Out, gifOut, thumbOut, paletteOut]
+      [sourcePath, mp4Out, gifOut, thumbOut, paletteOut]
         .filter(Boolean)
         .map((f) => unlink(f).catch(() => {}))
     );
