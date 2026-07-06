@@ -75,25 +75,21 @@ function FeedCard({ video }: { video: VideoRecord }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const hasCountedView = useRef(false);
     const [muted, setMuted] = useState(true);
+    const [playing, setPlaying] = useState(false);
 
     // Only the card mostly in view plays — like a TikTok/Reels feed, not
     // every video on the page playing at once. Counts one view the first
     // time it autoplays, not every time you scroll back over it.
     useEffect(() => {
-        const videoEl = videoRef.current;
         const container = containerRef.current;
-        if (!videoEl || !container) return;
+        if (!container) return;
 
         const observer = new IntersectionObserver(
             ([entry]) => {
-                if (entry.isIntersecting) {
-                    videoEl.play().catch(() => { });
-                    if (!hasCountedView.current) {
-                        hasCountedView.current = true;
-                        fetch(`/api/video/${video.videoId}/view`, { method: "POST" }).catch(() => { });
-                    }
-                } else {
-                    videoEl.pause();
+                setPlaying(entry.isIntersecting);
+                if (entry.isIntersecting && !hasCountedView.current) {
+                    hasCountedView.current = true;
+                    fetch(`/api/video/${video.videoId}/view`, { method: "POST" }).catch(() => { });
                 }
             },
             { threshold: 0.6 }
@@ -102,6 +98,19 @@ function FeedCard({ video }: { video: VideoRecord }) {
         observer.observe(container);
         return () => observer.disconnect();
     }, [video.videoId]);
+
+    // Keeps the actual <video> element in sync with `playing`, whichever
+    // reason it changed for — scrolling into/out of view, or someone
+    // tapping the video to pause/resume it.
+    useEffect(() => {
+        const videoEl = videoRef.current;
+        if (!videoEl) return;
+        if (playing) {
+            videoEl.play().catch(() => { });
+        } else {
+            videoEl.pause();
+        }
+    }, [playing]);
 
     return (
         <div
@@ -121,8 +130,17 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 muted={muted}
                 loop
                 playsInline
-                className="w-full h-full object-cover"
+                onClick={() => setPlaying((p) => !p)}
+                className="w-full h-full object-cover cursor-pointer"
             />
+
+            {!playing && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
+                        <PlayIcon />
+                    </div>
+                </div>
+            )}
 
             <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
                 <div className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-full bg-black/50 backdrop-blur">
@@ -191,6 +209,14 @@ function EmptyState() {
                 upload a video
             </a>
         </div>
+    );
+}
+
+function PlayIcon() {
+    return (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+            <path d="M8 5v14l11-7z" />
+        </svg>
     );
 }
 
