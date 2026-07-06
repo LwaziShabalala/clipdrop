@@ -20,11 +20,8 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
   experimental: {
     // Default request body cap is 10MB, which was silently truncating video
-    // uploads before they even reached /api/upload. Both names are set
-    // together since Next.js has renamed this option across recent
-    // versions (from "middleware" to "proxy" terminology).
+    // uploads before they even reached /api/upload.
     proxyClientMaxBodySize: "500mb",
-    middlewareClientMaxBodySize: "500mb",
   },
 };
 
