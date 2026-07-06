@@ -18,11 +18,11 @@ const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
   try {
-    // Gate on auth() — a fast, local session check. currentUser() below
-    // makes an actual network call to Clerk's API for profile details, which
-    // can occasionally fail even for a genuinely signed-in user, so it's
-    // only used for the nice-to-have name/photo, never as the access check.
-    const { isAuthenticated } = await auth();
+    // treatPendingAsSignedOut: false — same fix as proxy.ts. This route has
+    // its own independent auth check (proxy.ts only controls whether the
+    // /upload PAGE loads, not whether this API call succeeds), so it needed
+    // the same fix applied here too.
+    const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
     if (!isAuthenticated) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
