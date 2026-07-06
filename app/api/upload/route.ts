@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("video") as File | null;
+    const titleInput = (formData.get("title") as string | null)?.trim();
 
     if (!file) {
       return NextResponse.json({ error: "No video file provided" }, { status: 400 });
@@ -93,7 +94,8 @@ export async function POST(req: NextRequest) {
     // local copy in UPLOAD_DIR is ephemeral (os.tmpdir()) and not something
     // any other request or a later visit can rely on still being there.
     const videoId = randomUUID();
-    const title = path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
+    const title =
+      titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
 
     const [videoUrl, thumbUrl] = await Promise.all([
       uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4"),

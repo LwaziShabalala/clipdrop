@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type Stage = "idle" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
+type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
 interface UploadResult {
   videoId: string;
@@ -31,6 +31,8 @@ function UploadPageInner() {
 
   const [stage, setStage] = useState<Stage>(existingVideoId ? "loading" : "idle");
   const [error, setError] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [clip, setClip] = useState<ClipResult | null>(null);
   const [caption, setCaption] = useState("");
@@ -75,35 +77,14 @@ function UploadPageInner() {
     })();
   }, [existingVideoId]);
 
-  const handleFileSelect = useCallback(
-    async (file: File) => {
-      setError("");
-      setStage("uploading");
-      setClip(null);
-
-      const formData = new FormData();
-      formData.append("video", file);
-
-      try {
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
-
-        if (!res.ok) {
-          setError(data.error || "Upload failed");
-          setStage("error");
-          return;
-        }
-
-        // Uploading publishes the video — it's watchable immediately.
-        // Clip-making happens from the watch page as a separate step.
-        router.push(`/v/${data.videoId}`);
-      } catch {
-        setError("Upload failed. Check your connection and try again.");
-        setStage("error");
-      }
-    },
-    [router]
-  );
+  // Picking a file no longer uploads immediately — it goes to a details
+  // screen first so a title can be added or edited.
+  const handleFileSelect = useCallback((file: File) => {
+    setError("");
+    setSelectedFile(file);
+    setTitle(file.name.replace(/\.[^/.]+$/, ""));
+    setStage("details");
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -113,6 +94,34 @@ function UploadPageInner() {
     },
     [handleFileSelect]
   );
+
+  const handleConfirmUpload = useCallback(async () => {
+    if (!selectedFile) return;
+    setError("");
+    setStage("uploading");
+
+    const formData = new FormData();
+    formData.append("video", selectedFile);
+    formData.append("title", title.trim());
+
+    try {
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Upload failed");
+        setStage("error");
+        return;
+      }
+
+      // Uploading publishes the video — it's watchable immediately.
+      // Clip-making happens from the watch page as a separate step.
+      router.push(`/v/${data.videoId}`);
+    } catch {
+      setError("Upload failed. Check your connection and try again.");
+      setStage("error");
+    }
+  }, [selectedFile, title, router]);
 
   const handleGenerate = async () => {
     if (!upload) return;
@@ -152,6 +161,8 @@ function UploadPageInner() {
 
   const reset = () => {
     setStage("idle");
+    setSelectedFile(null);
+    setTitle("");
     setUpload(null);
     setClip(null);
     setCaption("");
@@ -173,6 +184,20 @@ function UploadPageInner() {
       <div className="max-w-2xl mx-auto px-6 py-10">
         {stage === "idle" && (
           <DropZone onDrop={handleDrop} onSelect={handleFileSelect} fileInputRef={fileInputRef} />
+        )}
+
+        {stage === "details" && selectedFile && (
+          <DetailsForm
+            file={selectedFile}
+            title={title}
+            setTitle={setTitle}
+            onConfirm={handleConfirmUpload}
+            onCancel={() => {
+              setSelectedFile(null);
+              setTitle("");
+              setStage("idle");
+            }}
+          />
         )}
 
         {(stage === "loading" || stage === "uploading") && (
@@ -270,6 +295,52 @@ function DropZone({
           if (file) onSelect(file);
         }}
       />
+    </div>
+  );
+}
+
+function DetailsForm({
+  file,
+  title,
+  setTitle,
+  onConfirm,
+  onCancel,
+}: {
+  file: File;
+  title: string;
+  setTitle: (s: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div>
+      <div className="rounded-xl border border-[#26262c] bg-[#141417] px-4 py-3 mb-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-[#c8c8cc] truncate">{file.name}</p>
+        <button
+          onClick={onCancel}
+          className="text-xs text-[#5a5a62] hover:text-[#8a8a92] transition-colors shrink-0"
+        >
+          change
+        </button>
+      </div>
+
+      <label className="text-xs font-medium text-[#8a8a92] mb-1.5 block">Title</label>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Give your video a title"
+        autoFocus
+        className="w-full rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5 text-sm placeholder:text-[#5a5a62] outline-none focus:border-[#3a3a42] transition-colors mb-5"
+        maxLength={100}
+      />
+
+      <button
+        onClick={onConfirm}
+        disabled={!title.trim()}
+        className="w-full rounded-lg bg-[#ff3d6e] text-white text-sm font-semibold py-3 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#ff5580] transition-colors"
+      >
+        upload
+      </button>
     </div>
   );
 }
