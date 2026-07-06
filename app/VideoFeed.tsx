@@ -48,7 +48,7 @@ export function VideoFeed({ videos }: { videos: VideoRecord[] }) {
     return (
         <div
             ref={containerRef}
-            className="overflow-y-auto"
+            className="overflow-y-auto no-scrollbar"
             style={{
                 height: "min(calc(100dvh - 100px), 860px)",
                 scrollSnapType: "y mandatory",
