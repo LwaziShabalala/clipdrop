@@ -18,10 +18,10 @@ const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
   try {
-    // treatPendingAsSignedOut: false — same fix as proxy.ts. This route has
-    // its own independent auth check (proxy.ts only controls whether the
-    // /upload PAGE loads, not whether this API call succeeds), so it needed
-    // the same fix applied here too.
+    // Gate on auth() — a fast, local session check. currentUser() below
+    // makes an actual network call to Clerk's API for profile details, which
+    // can occasionally fail even for a genuinely signed-in user, so it's
+    // only used for the nice-to-have name/photo, never as the access check.
     const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
     if (!isAuthenticated) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
@@ -58,6 +58,15 @@ export async function POST(req: NextRequest) {
     const bytes = Buffer.from(await file.arrayBuffer());
     await writeFile(filepath, bytes);
 
+    const videoId = randomUUID();
+    const title = titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
+
+    // Start the video's R2 upload right away — it only needs the raw bytes
+    // we already have in memory, not anything from ffprobe/ffmpeg below. It
+    // runs in the background while those steps happen, instead of waiting
+    // for them to finish first.
+    const videoUploadPromise = uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4");
+
     // Probe video duration + dimensions with ffprobe
     const { stdout } = await execFileAsync("ffprobe", [
       "-v", "error",
@@ -89,18 +98,11 @@ export async function POST(req: NextRequest) {
       thumbPath,
     ]);
     const thumbBuf = await readFile(thumbPath);
+    const thumbUploadPromise = uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg");
 
-    // Persist the full video + poster to R2 so it's actually watchable — the
-    // local copy in UPLOAD_DIR is ephemeral (os.tmpdir()) and not something
-    // any other request or a later visit can rely on still being there.
-    const videoId = randomUUID();
-    const title =
-      titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
-
-    const [videoUrl, thumbUrl] = await Promise.all([
-      uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4"),
-      uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg"),
-    ]);
+    // Now wait for both uploads (video may already be done or nearly done,
+    // since it's had a head start while ffprobe/ffmpeg were running).
+    const [videoUrl, thumbUrl] = await Promise.all([videoUploadPromise, thumbUploadPromise]);
 
     await saveVideo({
       videoId,

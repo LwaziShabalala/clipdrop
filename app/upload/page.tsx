@@ -33,6 +33,7 @@ function UploadPageInner() {
   const [error, setError] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [clip, setClip] = useState<ClipResult | null>(null);
   const [caption, setCaption] = useState("");
@@ -95,20 +96,37 @@ function UploadPageInner() {
     [handleFileSelect]
   );
 
-  const handleConfirmUpload = useCallback(async () => {
+  // Uses XHR instead of fetch specifically because fetch has no reliable
+  // way to report upload progress — XHR's upload.onprogress does.
+  const handleConfirmUpload = useCallback(() => {
     if (!selectedFile) return;
     setError("");
+    setUploadProgress(0);
     setStage("uploading");
 
     const formData = new FormData();
     formData.append("video", selectedFile);
     formData.append("title", title.trim());
 
-    try {
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
+    const xhr = new XMLHttpRequest();
 
-      if (!res.ok) {
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      let data: { videoId?: string; error?: string } = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        setError("Upload failed. Check your connection and try again.");
+        setStage("error");
+        return;
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300) {
         setError(data.error || "Upload failed");
         setStage("error");
         return;
@@ -117,10 +135,15 @@ function UploadPageInner() {
       // Uploading publishes the video — it's watchable immediately.
       // Clip-making happens from the watch page as a separate step.
       router.push(`/v/${data.videoId}`);
-    } catch {
+    });
+
+    xhr.addEventListener("error", () => {
       setError("Upload failed. Check your connection and try again.");
       setStage("error");
-    }
+    });
+
+    xhr.open("POST", "/api/upload");
+    xhr.send(formData);
   }, [selectedFile, title, router]);
 
   const handleGenerate = async () => {
@@ -163,6 +186,7 @@ function UploadPageInner() {
     setStage("idle");
     setSelectedFile(null);
     setTitle("");
+    setUploadProgress(0);
     setUpload(null);
     setClip(null);
     setCaption("");
@@ -200,11 +224,23 @@ function UploadPageInner() {
           />
         )}
 
-        {(stage === "loading" || stage === "uploading") && (
+        {stage === "loading" && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Spinner />
+            <p className="text-sm text-[#8a8a92]">loading video…</p>
+          </div>
+        )}
+
+        {stage === "uploading" && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-full max-w-xs h-2 rounded-full bg-[#1c1c20] overflow-hidden">
+              <div
+                className="h-full bg-[#ff3d6e] transition-all duration-150 ease-out"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
             <p className="text-sm text-[#8a8a92]">
-              {stage === "uploading" ? "uploading video…" : "loading video…"}
+              {uploadProgress < 100 ? `uploading… ${uploadProgress}%` : "processing…"}
             </p>
           </div>
         )}
