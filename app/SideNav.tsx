@@ -21,7 +21,7 @@ export function SideNav() {
                     <a
                         key={href}
                         href={href}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                        className={`flex items-center justify-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
                                 ? "bg-[#ff3d6e]/10 text-[#f2f2f0]"
                                 : "text-[#8a8a92] hover:bg-[#141417] hover:text-[#f2f2f0]"
                             }`}
