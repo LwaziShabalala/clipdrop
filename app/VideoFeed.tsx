@@ -112,6 +112,16 @@ function FeedCard({ video }: { video: VideoRecord }) {
         }
     }, [playing]);
 
+    const handleFullscreen = () => {
+        const el = videoRef.current;
+        if (!el) return;
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => { });
+        } else {
+            el.requestFullscreen().catch(() => { });
+        }
+    };
+
     return (
         <div
             ref={containerRef}
@@ -142,8 +152,9 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 </div>
             )}
 
-            {/* Vertically centered on the right edge, like a TikTok action
-                rail — not clustered in the top corner. */}
+            {/* Vertically centered on the right edge, like a TikTok/RedGifs
+                action rail. Follow + likes intentionally aren't here yet —
+                neither has real data behind it. */}
             <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-3">
                 <div className="flex flex-col items-center gap-1 px-2.5 py-2 rounded-full bg-black/50 backdrop-blur">
                     <EyeIcon />
@@ -151,6 +162,13 @@ function FeedCard({ video }: { video: VideoRecord }) {
                         {formatCount(video.views ?? 0)}
                     </span>
                 </div>
+                <button
+                    onClick={handleFullscreen}
+                    className="w-11 h-11 rounded-full bg-black/50 backdrop-blur flex items-center justify-center hover:bg-black/70 transition-colors"
+                    aria-label="Fullscreen"
+                >
+                    <ExpandIcon />
+                </button>
                 <button
                     onClick={() => setMuted((m) => !m)}
                     className="w-11 h-11 rounded-full bg-black/50 backdrop-blur flex items-center justify-center hover:bg-black/70 transition-colors"
@@ -218,6 +236,17 @@ function PlayIcon() {
     return (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
             <path d="M8 5v14l11-7z" />
+        </svg>
+    );
+}
+
+function ExpandIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
         </svg>
     );
 }
