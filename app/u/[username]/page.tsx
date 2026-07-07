@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getVideosByUploader } from "@/lib/videoStore";
-import { notFound } from "next/navigation";
 
 export async function generateMetadata({
     params,
@@ -19,8 +18,6 @@ export default async function ProfilePage({
     const { username } = await params;
     const decodedUsername = decodeURIComponent(username);
     const videos = await getVideosByUploader(decodedUsername);
-
-    if (videos.length === 0) notFound();
 
     const totalViews = videos.reduce((sum, v) => sum + (v.views ?? 0), 0);
     const avatarUrl = videos[0]?.uploaderImageUrl;
@@ -72,34 +69,49 @@ export default async function ProfilePage({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {videos.map((video) => {
-                        const ratio = video.width && video.height ? video.width / video.height : 9 / 16;
-                        return (
-                            <a
-                                key={video.videoId}
-                                href={`/v/${video.videoId}`}
-                                className="group block rounded-xl overflow-hidden border border-[#26262c] bg-[#111114] hover:border-[#3a3a42] transition-colors"
-                            >
-                                <div className="relative bg-black" style={{ aspectRatio: ratio }}>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={video.thumbUrl}
-                                        alt={video.title}
-                                        className="absolute inset-0 w-full h-full object-cover"
-                                        loading="lazy"
-                                    />
-                                </div>
-                                <div className="px-3 py-2.5">
-                                    <p className="text-sm text-[#d4d4d8] truncate">{video.title}</p>
-                                    <p className="text-[11px] text-[#5a5a62] mt-0.5">
-                                        {formatCount(video.views ?? 0)} views
-                                    </p>
-                                </div>
-                            </a>
-                        );
-                    })}
-                </div>
+                {videos.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-24 rounded-2xl border-2 border-dashed border-[#26262c] text-center">
+                        <div className="w-12 h-12 rounded-full bg-[#1c1c20] flex items-center justify-center text-xl">
+                            🎬
+                        </div>
+                        <p className="text-sm font-medium">No videos yet</p>
+                        <a
+                            href="/upload"
+                            className="mt-2 text-sm font-medium px-4 py-2 rounded-lg bg-[#ff3d6e] text-white hover:bg-[#ff5580] transition-colors"
+                        >
+                            upload a video
+                        </a>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {videos.map((video) => {
+                            const ratio = video.width && video.height ? video.width / video.height : 9 / 16;
+                            return (
+                                <a
+                                    key={video.videoId}
+                                    href={`/v/${video.videoId}`}
+                                    className="group block rounded-xl overflow-hidden border border-[#26262c] bg-[#111114] hover:border-[#3a3a42] transition-colors"
+                                >
+                                    <div className="relative bg-black" style={{ aspectRatio: ratio }}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={video.thumbUrl}
+                                            alt={video.title}
+                                            className="absolute inset-0 w-full h-full object-cover"
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                    <div className="px-3 py-2.5">
+                                        <p className="text-sm text-[#d4d4d8] truncate">{video.title}</p>
+                                        <p className="text-[11px] text-[#5a5a62] mt-0.5">
+                                            {formatCount(video.views ?? 0)} views
+                                        </p>
+                                    </div>
+                                </a>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </main>
     );

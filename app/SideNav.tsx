@@ -1,14 +1,24 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-
-const navItems = [
-    { href: "/", label: "Home", Icon: HomeIcon },
-    { href: "/upload", label: "Upload", Icon: UploadIcon },
-];
+import { useUser } from "@clerk/nextjs";
 
 export function SideNav() {
     const pathname = usePathname();
+    const { isSignedIn, user } = useUser();
+
+    const navItems = [
+        { href: "/", label: "Home", Icon: HomeIcon },
+        { href: "/upload", label: "Upload", Icon: UploadIcon },
+    ];
+
+    if (isSignedIn && user?.username) {
+        navItems.push({
+            href: `/u/${encodeURIComponent(user.username)}`,
+            label: "Profile",
+            Icon: ProfileIcon,
+        });
+    }
 
     return (
         <nav
@@ -50,6 +60,15 @@ function UploadIcon() {
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+    );
+}
+
+function ProfileIcon() {
+    return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
         </svg>
     );
 }
