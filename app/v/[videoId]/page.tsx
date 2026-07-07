@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getVideo } from "@/lib/videoStore";
+import { getVideo, incrementViews } from "@/lib/videoStore";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
 import { ViewTracker } from "./ViewTracker";
@@ -46,6 +46,10 @@ export default async function WatchPage({
 
     if (!video) notFound();
 
+    // Counts once per visit to this page. generateMetadata above also loads
+    // the video but never calls this, so it doesn't double-count.
+    const views = await incrementViews(videoId);
+
     return (
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
             <ViewTracker videoId={video.videoId} />
@@ -83,7 +87,10 @@ export default async function WatchPage({
                 <div className="flex items-start justify-between gap-4 mt-5">
                     <div>
                         {video.uploaderName && (
-                            <div className="flex items-center gap-2 mb-2">
+                            <a
+                                href={`/u/${encodeURIComponent(video.uploaderName)}`}
+                                className="flex items-center gap-2 mb-2 w-fit"
+                            >
                                 {video.uploaderImageUrl && (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img
@@ -92,8 +99,10 @@ export default async function WatchPage({
                                         className="w-6 h-6 rounded-full object-cover"
                                     />
                                 )}
-                                <span className="text-sm font-medium text-[#d4d4d8]">{video.uploaderName}</span>
-                            </div>
+                                <span className="text-sm font-medium text-[#d4d4d8] hover:text-white transition-colors">
+                                    {video.uploaderName}
+                                </span>
+                            </a>
                         )}
                         <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
                         <p className="text-xs text-[#5a5a62] mt-1">

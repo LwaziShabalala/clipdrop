@@ -193,12 +193,16 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 </button>
             </div>
 
-            <a
-                href={`/v/${video.videoId}`}
-                className="absolute bottom-0 left-0 right-0 z-10 px-4 pt-10 pb-3 pr-24 bg-gradient-to-t from-black/80 to-transparent"
-            >
+            {/* Not one big link anymore — the uploader name and the title
+                are two separate links now (to their profile and to this
+                video), which is also just correct HTML: an <a> can't sit
+                inside another <a>. */}
+            <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pt-10 pb-3 pr-24 bg-gradient-to-t from-black/80 to-transparent">
                 {video.uploaderName && (
-                    <div className="flex items-center gap-2 mb-2">
+                    <a
+                        href={`/u/${encodeURIComponent(video.uploaderName)}`}
+                        className="flex items-center gap-2 mb-2 w-fit"
+                    >
                         {video.uploaderImageUrl && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -207,12 +211,16 @@ function FeedCard({ video }: { video: VideoRecord }) {
                                 className="w-8 h-8 rounded-full object-cover"
                             />
                         )}
-                        <span className="text-sm font-medium text-[#d4d4d8]">{video.uploaderName}</span>
-                    </div>
+                        <span className="text-sm font-medium text-[#d4d4d8] hover:text-white transition-colors">
+                            {video.uploaderName}
+                        </span>
+                    </a>
                 )}
-                <p className="text-sm font-medium text-[#f2f2f0] truncate">{video.title}</p>
-                <p className="text-[11px] text-[#c8c8cc]/70 mt-0.5">{timeAgo(video.createdAt)}</p>
-            </a>
+                <a href={`/v/${video.videoId}`} className="block">
+                    <p className="text-sm font-medium text-[#f2f2f0] truncate">{video.title}</p>
+                    <p className="text-[11px] text-[#c8c8cc]/70 mt-0.5">{timeAgo(video.createdAt)}</p>
+                </a>
+            </div>
 
             <a
                 href={`/upload?videoId=${video.videoId}`}

@@ -72,6 +72,14 @@ export async function listVideos(): Promise<VideoRecord[]> {
   return rows.map(toVideoRecord);
 }
 
+export async function getVideosByUploader(uploaderName: string): Promise<VideoRecord[]> {
+  const rows = await prisma.video.findMany({
+    where: { uploaderName },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(toVideoRecord);
+}
+
 export async function deleteVideo(videoId: string) {
   await prisma.video.delete({ where: { videoId } }).catch(() => {});
 }
