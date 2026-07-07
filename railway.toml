@@ -3,7 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "for i in 1 2 3 4 5; do npx prisma migrate deploy && break; echo migration attempt failed, retrying; sleep 3; done; npm run start"
+preDeployCommand = "npx prisma migrate deploy"
+startCommand = "npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
