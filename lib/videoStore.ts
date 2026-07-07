@@ -1,8 +1,4 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "videos.json");
+import { prisma } from "./prisma";
 
 export interface VideoRecord {
   videoId: string;
@@ -18,46 +14,74 @@ export interface VideoRecord {
   createdAt: string;
 }
 
-async function readDb(): Promise<VideoRecord[]> {
-  try {
-    const raw = await readFile(DB_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
+type VideoRow = {
+  videoId: string;
+  title: string;
+  videoUrl: string;
+  thumbUrl: string;
+  width: number;
+  height: number;
+  duration: number;
+  views: number;
+  uploaderName: string | null;
+  uploaderImageUrl: string | null;
+  createdAt: Date;
+};
 
-async function writeDb(records: VideoRecord[]) {
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(DB_PATH, JSON.stringify(records, null, 2));
+function toVideoRecord(row: VideoRow): VideoRecord {
+  return {
+    videoId: row.videoId,
+    title: row.title,
+    videoUrl: row.videoUrl,
+    thumbUrl: row.thumbUrl,
+    width: row.width,
+    height: row.height,
+    duration: row.duration,
+    views: row.views,
+    uploaderName: row.uploaderName ?? undefined,
+    uploaderImageUrl: row.uploaderImageUrl ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 export async function saveVideo(record: VideoRecord) {
-  const db = await readDb();
-  db.unshift(record);
-  await writeDb(db);
+  await prisma.video.create({
+    data: {
+      videoId: record.videoId,
+      title: record.title,
+      videoUrl: record.videoUrl,
+      thumbUrl: record.thumbUrl,
+      width: record.width,
+      height: record.height,
+      duration: record.duration,
+      views: record.views,
+      uploaderName: record.uploaderName,
+      uploaderImageUrl: record.uploaderImageUrl,
+      createdAt: new Date(record.createdAt),
+    },
+  });
 }
 
 export async function getVideo(videoId: string): Promise<VideoRecord | null> {
-  const db = await readDb();
-  return db.find((v) => v.videoId === videoId) ?? null;
+  const row = await prisma.video.findUnique({ where: { videoId } });
+  return row ? toVideoRecord(row) : null;
 }
 
 export async function listVideos(): Promise<VideoRecord[]> {
-  return readDb();
+  const rows = await prisma.video.findMany({ orderBy: { createdAt: "desc" } });
+  return rows.map(toVideoRecord);
 }
 
 export async function deleteVideo(videoId: string) {
-  const db = await readDb();
-  const filtered = db.filter((v) => v.videoId !== videoId);
-  await writeDb(filtered);
+  await prisma.video.delete({ where: { videoId } }).catch(() => {});
 }
 
 export async function incrementViews(videoId: string): Promise<number> {
-  const db = await readDb();
-  const video = db.find((v) => v.videoId === videoId);
-  if (!video) return 0;
-  video.views = (video.views ?? 0) + 1;
-  await writeDb(db);
-  return video.views;
+  const updated = await prisma.video
+    .update({
+      where: { videoId },
+      data: { views: { increment: 1 } },
+    })
+    .catch(() => null);
+  return updated?.views ?? 0;
 }
