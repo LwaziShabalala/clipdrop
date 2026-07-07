@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Video {
+  videoId          String   @id @default(uuid())
+  title            String
+  videoUrl         String
+  thumbUrl         String
+  width            Int
+  height           Int
+  duration         Float
+  views            Int      @default(0)
+  uploaderName     String?
+  uploaderImageUrl String?
+  createdAt        DateTime @default(now())
+}
+
+model Clip {
+  clipId    String   @id @default(uuid())
+  caption   String
+  mp4Url    String
+  gifUrl    String
+  thumbUrl  String
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+}

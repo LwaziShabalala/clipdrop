@@ -18,9 +18,8 @@ const nextConfig: NextConfig = {
     ];
   },
   skipTrailingSlashRedirect: true,
+  serverExternalPackages: ["@prisma/client", "pg"],
   experimental: {
-    // Default request body cap is 10MB, which was silently truncating video
-    // uploads before they even reached /api/upload.
     proxyClientMaxBodySize: "500mb",
   },
 };
