@@ -12,7 +12,7 @@ export function SideNav() {
 
     return (
         <nav
-            className="hidden lg:flex lg:flex-col gap-1 px-4 pt-12 pb-6 shrink-0 border-r border-[#1c1c20]"
+            className="hidden lg:flex lg:flex-col justify-center gap-1 px-4 shrink-0 border-r border-[#1c1c20]"
             style={{ width: 240 }}
         >
             {navItems.map(({ href, label, Icon }) => {
