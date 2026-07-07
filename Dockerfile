@@ -14,10 +14,14 @@ RUN npm ci
 # Copy all source files
 COPY . .
 
-# Generate the Prisma client — needs prisma/schema.prisma and
-# prisma.config.ts, which is why this runs here, after COPY . ., not
-# right after npm ci.
-RUN npx prisma generate
+# Generate the Prisma client. This runs during the BUILD, before the
+# container starts — so Railway's real DATABASE_URL isn't available yet
+# (that only exists once the container is actually running). prisma.config.ts
+# still needs *some* value to exist to load successfully, so this placeholder
+# is scoped to only this one command — it's never actually connected to,
+# generate only reads the schema's structure. The real DATABASE_URL takes
+# over at container startup, from Railway's runtime variables.
+RUN DATABASE_URL="postgresql://user:password@localhost:5432/placeholder" npx prisma generate
 
 # Declare build-time args (Railway injects these from your Variables tab)
 ARG NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
