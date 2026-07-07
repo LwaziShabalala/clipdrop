@@ -1,5 +1,6 @@
 import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
+import { SideNav } from "./sideNav";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
@@ -39,26 +40,7 @@ export default async function HomePage() {
       </header>
 
       <div className="flex flex-col lg:flex-row">
-        {/* Left nav — real links, not blank */}
-        <nav
-          className="hidden lg:flex lg:flex-col gap-1 px-4 py-6 shrink-0 border-r border-[#1c1c20]"
-          style={{ width: 240 }}
-        >
-          <a
-            href="/"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#8a8a92] hover:bg-[#141417] hover:text-[#f2f2f0] transition-colors"
-          >
-            <HomeIcon />
-            Home
-          </a>
-          <a
-            href="/upload"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#8a8a92] hover:bg-[#141417] hover:text-[#f2f2f0] transition-colors"
-          >
-            <UploadIcon />
-            Upload
-          </a>
-        </nav>
+        <SideNav />
 
         {/* Center feed — width is inline-styled inside VideoFeed itself */}
         <div className="flex-1 flex justify-center px-4 sm:px-6 py-8">
@@ -71,24 +53,5 @@ export default async function HomePage() {
         <div className="hidden lg:block shrink-0" style={{ width: 240 }} />
       </div>
     </main>
-  );
-}
-
-function HomeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
-
-function UploadIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
   );
 }
