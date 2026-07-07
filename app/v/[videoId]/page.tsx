@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { getVideo, incrementViews } from "@/lib/videoStore";
+import { getVideo } from "@/lib/videoStore";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
+import { ViewTracker } from "./ViewTracker";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -45,12 +46,10 @@ export default async function WatchPage({
 
     if (!video) notFound();
 
-    // Counts once per visit to this page. generateMetadata above also loads
-    // the video but never calls this, so it doesn't double-count.
-    const views = await incrementViews(videoId);
-
     return (
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
+            <ViewTracker videoId={video.videoId} />
+
             <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-20">
                 <a href="/" className="font-bold tracking-tight text-lg">
                     clip<span className="text-[#ff3d6e]">drop</span>
@@ -98,7 +97,7 @@ export default async function WatchPage({
                         )}
                         <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
                         <p className="text-xs text-[#5a5a62] mt-1">
-                            {formatCount(views)} views · {timeAgo(video.createdAt)}
+                            {formatCount(video.views ?? 0)} views · {timeAgo(video.createdAt)}
                         </p>
                     </div>
                     <a

@@ -3,6 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import type { VideoRecord } from "@/lib/videoStore";
 
+function hasAlreadyViewed(videoId: string): boolean {
+    try {
+        return localStorage.getItem(`viewed:${videoId}`) !== null;
+    } catch {
+        return false;
+    }
+}
+
+function markViewed(videoId: string) {
+    try {
+        localStorage.setItem(`viewed:${videoId}`, "1");
+    } catch {
+        // localStorage unavailable — worst case this browser can recount once
+    }
+}
+
 export function VideoFeed({ videos }: { videos: VideoRecord[] }) {
     const [activeIndex, setActiveIndex] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -73,13 +89,14 @@ export function VideoFeed({ videos }: { videos: VideoRecord[] }) {
 function FeedCard({ video }: { video: VideoRecord }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const hasCountedView = useRef(false);
     const [muted, setMuted] = useState(true);
     const [playing, setPlaying] = useState(false);
 
     // Only the card mostly in view plays — like a TikTok/Reels feed, not
-    // every video on the page playing at once. Counts one view the first
-    // time it autoplays, not every time you scroll back over it.
+    // every video on the page playing at once. Counts a view once per
+    // browser per video (using localStorage, shared with the watch page's
+    // own tracker) — not once per component mount, so refreshing the page
+    // and scrolling past the same video again doesn't recount it.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -87,9 +104,10 @@ function FeedCard({ video }: { video: VideoRecord }) {
         const observer = new IntersectionObserver(
             ([entry]) => {
                 setPlaying(entry.isIntersecting);
-                if (entry.isIntersecting && !hasCountedView.current) {
-                    hasCountedView.current = true;
-                    fetch(`/api/video/${video.videoId}/view`, { method: "POST" }).catch(() => { });
+                if (entry.isIntersecting && !hasAlreadyViewed(video.videoId)) {
+                    fetch(`/api/video/${video.videoId}/view`, { method: "POST" })
+                        .then(() => markViewed(video.videoId))
+                        .catch(() => { });
                 }
             },
             { threshold: 0.6 }
@@ -152,9 +170,6 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 </div>
             )}
 
-            {/* Vertically centered on the right edge, like a TikTok/RedGifs
-                action rail. Follow + likes intentionally aren't here yet —
-                neither has real data behind it. */}
             <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-3">
                 <div className="flex flex-col items-center gap-1 px-2.5 py-2 rounded-full bg-black/50 backdrop-blur">
                     <EyeIcon />
