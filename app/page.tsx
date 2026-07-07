@@ -1,6 +1,6 @@
 import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
-import { SideNav } from "./sideNav";
+import { SideNav } from "./SideNav";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
