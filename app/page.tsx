@@ -40,8 +40,20 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row">
+      {/* Capped + centered so the whole layout doesn't just stretch to fill
+          an ultra-wide monitor — this is what keeps the right ad from
+          sitting flush against the true edge of the browser. */}
+      <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
         <SideNav />
+
+        {/* Left ad column — mirrors the right one */}
+        <div
+          className="hidden lg:flex lg:flex-col items-center gap-2 shrink-0 pt-12"
+          style={{ width: 240 }}
+        >
+          <BannerAd />
+          <p className="text-[11px] text-[#5a5a62]">Ads help keep clipdrop free</p>
+        </div>
 
         {/* Center feed — width is inline-styled inside VideoFeed itself */}
         <div className="flex-1 flex justify-center px-4 sm:px-6 py-8">
@@ -50,7 +62,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Right gutter — now holds the real ad */}
+        {/* Right ad column */}
         <div
           className="hidden lg:flex lg:flex-col items-center gap-2 shrink-0 pt-12"
           style={{ width: 240 }}
