@@ -6,6 +6,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ClipDrop",
   description: "Trim, watermark, and share clips as GIFs",
+  verification: {
+    other: {
+      "6a97888e-site-verification": "144dc3a84e8a005cece6f3e6877a1396",
+    },
+  },
 };
 
 export default function RootLayout({
