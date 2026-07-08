@@ -1,6 +1,7 @@
 import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
 import { SideNav } from "./SideNav";
+import { BannerAd } from "./BannerAd";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
@@ -49,8 +50,14 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Right gutter — ad slot goes here. Left empty on purpose. */}
-        <div className="hidden lg:block shrink-0" style={{ width: 240 }} />
+        {/* Right gutter — now holds the real ad */}
+        <div
+          className="hidden lg:flex lg:flex-col items-center gap-2 shrink-0 pt-12"
+          style={{ width: 240 }}
+        >
+          <BannerAd />
+          <p className="text-[11px] text-[#5a5a62]">Ads help keep clipdrop free</p>
+        </div>
       </div>
     </main>
   );
