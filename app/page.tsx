@@ -6,8 +6,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
 
-const LEFT_AD_KEY = "e3f7c2804419b765d6598e28b441f10f";
-const RIGHT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
+const AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
 
 export default async function HomePage() {
   const videos = await listVideos();
@@ -46,15 +45,12 @@ export default async function HomePage() {
       <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
         <SideNav />
 
-        {/* Left ad — 160x300, a different (shorter) size than the right
-            ad, so it's vertically centered in the column instead of
-            pinned to the top with empty space below it. */}
-        <div className="hidden lg:flex lg:flex-col justify-center shrink-0" style={{ width: 240 }}>
+        <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
           <div
             className="flex flex-col items-center"
             style={{ width: 160, marginLeft: "auto", marginRight: 0 }}
           >
-            <BannerAd adKey={LEFT_AD_KEY} height={300} />
+            <BannerAd adKey={AD_KEY} />
           </div>
         </div>
 
@@ -64,13 +60,12 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Right ad — original 160x600 */}
         <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
           <div
             className="flex flex-col items-center"
             style={{ width: 160, marginLeft: 0, marginRight: "auto" }}
           >
-            <BannerAd adKey={RIGHT_AD_KEY} />
+            <BannerAd adKey={AD_KEY} />
           </div>
         </div>
       </div>
