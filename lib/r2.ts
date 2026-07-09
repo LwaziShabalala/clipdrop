@@ -28,6 +28,10 @@ export async function uploadToR2(
       Key: key,
       Body: body,
       ContentType: contentType,
+      // Every upload gets a fresh, unique key and is never modified in
+      // place after creation — so it's safe to tell browsers/CDNs to cache
+      // it essentially forever instead of re-checking or re-fetching it.
+      CacheControl: "public, max-age=31536000, immutable",
     })
   );
   return `${R2_PUBLIC_URL}/${key}`;

@@ -25,13 +25,6 @@ export function VideoFeed({ videos }: { videos: VideoRecord[] }) {
     const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
     const cooldown = useRef(false);
 
-    // One wheel gesture — one mouse-wheel click, or one trackpad swipe — moves
-    // exactly one video, instead of free-scrolling through a tall card. The
-    // cooldown swallows the burst of extra wheel events a single trackpad
-    // swipe fires, so a fast swipe doesn't skip past several videos at once.
-    // Touch/swipe on mobile is untouched — this only listens for "wheel",
-    // which touch scrolling doesn't fire, so phones keep native swipe scrolling
-    // (backed by the CSS scroll-snap below).
     useEffect(() => {
         const container = containerRef.current;
         if (!container || videos.length === 0) return;
@@ -92,11 +85,6 @@ function FeedCard({ video }: { video: VideoRecord }) {
     const [muted, setMuted] = useState(true);
     const [playing, setPlaying] = useState(false);
 
-    // Only the card mostly in view plays — like a TikTok/Reels feed, not
-    // every video on the page playing at once. Counts a view once per
-    // browser per video (using localStorage, shared with the watch page's
-    // own tracker) — not once per component mount, so refreshing the page
-    // and scrolling past the same video again doesn't recount it.
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -117,9 +105,6 @@ function FeedCard({ video }: { video: VideoRecord }) {
         return () => observer.disconnect();
     }, [video.videoId]);
 
-    // Keeps the actual <video> element in sync with `playing`, whichever
-    // reason it changed for — scrolling into/out of view, or someone
-    // tapping the video to pause/resume it.
     useEffect(() => {
         const videoEl = videoRef.current;
         if (!videoEl) return;
@@ -158,6 +143,7 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 muted={muted}
                 loop
                 playsInline
+                preload="metadata"
                 onClick={() => setPlaying((p) => !p)}
                 className="w-full h-full object-cover cursor-pointer"
             />
@@ -193,10 +179,6 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 </button>
             </div>
 
-            {/* Not one big link anymore — the uploader name and the title
-                are two separate links now (to their profile and to this
-                video), which is also just correct HTML: an <a> can't sit
-                inside another <a>. */}
             <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pt-10 pb-3 pr-24 bg-gradient-to-t from-black/80 to-transparent">
                 {video.uploaderName && (
                     <a

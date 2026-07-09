@@ -67,8 +67,14 @@ export async function getVideo(videoId: string): Promise<VideoRecord | null> {
   return row ? toVideoRecord(row) : null;
 }
 
-export async function listVideos(): Promise<VideoRecord[]> {
-  const rows = await prisma.video.findMany({ orderBy: { createdAt: "desc" } });
+// Capped at 30 by default — the homepage feed doesn't need every video ever
+// uploaded, just the most recent batch. Without this, the query (and the
+// page's load time) would keep growing forever as more videos get added.
+export async function listVideos(limit = 30): Promise<VideoRecord[]> {
+  const rows = await prisma.video.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
   return rows.map(toVideoRecord);
 }
 
