@@ -24,9 +24,16 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ClerkProvider>{children}</ClerkProvider>
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID!} />
-        {/* Loads once, site-wide — individual ad placements just render
-            their own <ins> placeholder and tell this library to fill it. */}
+        {/* ExoClick loader, loads once site-wide */}
         <Script src="https://a.magsrv.com/ad-provider.js" strategy="afterInteractive" async />
+        {/* MyBid loader — covers Popunder, Web-push, and In-page together
+            for ad code #447595 */}
+        <Script
+          async
+          src="https://js.mbidadm.com/static/scripts.js"
+          data-admpid="447595"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
