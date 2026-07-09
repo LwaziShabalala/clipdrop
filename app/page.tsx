@@ -2,11 +2,11 @@ import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
 import { SideNav } from "./SideNav";
 import { BannerAd } from "./BannerAd";
-import { ExoclickBanner } from "./ExoclickBanner";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
 
+const LEFT_AD_KEY = "e3f7c2804419b765d6598e28b441f10f";
 const RIGHT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
 
 export default async function HomePage() {
@@ -46,14 +46,15 @@ export default async function HomePage() {
       <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
         <SideNav />
 
-        {/* Left ad — now the new network instead of Adsterra */}
-        <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
+        {/* Left ad — 160x300, a different (shorter) size than the right
+            ad, so it's vertically centered in the column instead of
+            pinned to the top with empty space below it. */}
+        <div className="hidden lg:flex lg:flex-col justify-center shrink-0" style={{ width: 240 }}>
           <div
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center"
             style={{ width: 160, marginLeft: "auto", marginRight: 0 }}
           >
-            <ExoclickBanner zoneId="5970078" />
-            <p className="text-[11px] text-[#5a5a62] text-center">Ads help keep clipdrop free</p>
+            <BannerAd adKey={LEFT_AD_KEY} height={300} />
           </div>
         </div>
 
@@ -63,14 +64,13 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Right ad — still Adsterra */}
+        {/* Right ad — original 160x600 */}
         <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
           <div
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center"
             style={{ width: 160, marginLeft: 0, marginRight: "auto" }}
           >
             <BannerAd adKey={RIGHT_AD_KEY} />
-            <p className="text-[11px] text-[#5a5a62] text-center">Ads help keep clipdrop free</p>
           </div>
         </div>
       </div>

@@ -2,7 +2,15 @@
 
 import { useEffect, useRef } from "react";
 
-export function BannerAd({ adKey }: { adKey: string }) {
+export function BannerAd({
+  adKey,
+  width = 160,
+  height = 600,
+}: {
+  adKey: string;
+  width?: number;
+  height?: number;
+}) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -27,8 +35,8 @@ export function BannerAd({ adKey }: { adKey: string }) {
             atOptions = {
               'key' : '${adKey}',
               'format' : 'iframe',
-              'height' : 600,
-              'width' : 160,
+              'height' : ${height},
+              'width' : ${width},
               'params' : {}
             };
           </script>
@@ -37,12 +45,12 @@ export function BannerAd({ adKey }: { adKey: string }) {
       </html>
     `);
     doc.close();
-  }, [adKey]);
+  }, [adKey, width, height]);
 
   return (
     <iframe
       ref={iframeRef}
-      style={{ width: 160, height: 600, border: "none" }}
+      style={{ width, height, border: "none" }}
       title="Advertisement"
     />
   );
