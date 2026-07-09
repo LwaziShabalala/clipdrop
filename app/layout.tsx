@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { GoogleAnalytics } from "@next/third-parties/google";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ClerkProvider>{children}</ClerkProvider>
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID!} />
+        {/* Loads once, site-wide — individual ad placements just render
+            their own <ins> placeholder and tell this library to fill it. */}
+        <Script src="https://a.magsrv.com/ad-provider.js" strategy="afterInteractive" async />
       </body>
     </html>
   );

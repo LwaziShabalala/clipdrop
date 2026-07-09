@@ -2,11 +2,11 @@ import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
 import { SideNav } from "./SideNav";
 import { BannerAd } from "./BannerAd";
+import { ExoclickBanner } from "./ExoclickBanner";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
 
-const LEFT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
 const RIGHT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
 
 export default async function HomePage() {
@@ -46,15 +46,13 @@ export default async function HomePage() {
       <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
         <SideNav />
 
-        {/* Left ad: pushed to the RIGHT edge of its 240px column (toward
-            the video), using marginLeft: auto instead of centering. This
-            closes the gap to the video and opens space toward the sidebar. */}
+        {/* Left ad — now the new network instead of Adsterra */}
         <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
           <div
             className="flex flex-col items-center gap-2"
             style={{ width: 160, marginLeft: "auto", marginRight: 0 }}
           >
-            <BannerAd adKey={LEFT_AD_KEY} />
+            <ExoclickBanner zoneId="5970078" />
             <p className="text-[11px] text-[#5a5a62] text-center">Ads help keep clipdrop free</p>
           </div>
         </div>
@@ -65,8 +63,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Right ad: pushed to the LEFT edge of its 240px column (toward
-            the video) — mirror of the left side. */}
+        {/* Right ad — still Adsterra */}
         <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
           <div
             className="flex flex-col items-center gap-2"
