@@ -6,6 +6,11 @@ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
 
+// TODO: swap LEFT_AD_KEY for the new ad unit's key once you create it in
+// Adsterra — right now both sides use the same key as a placeholder.
+const LEFT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
+const RIGHT_AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
+
 export default async function HomePage() {
   const videos = await listVideos();
 
@@ -40,35 +45,30 @@ export default async function HomePage() {
         </div>
       </header>
 
-      {/* Capped + centered so the whole layout doesn't just stretch to fill
-          an ultra-wide monitor — this is what keeps the right ad from
-          sitting flush against the true edge of the browser. */}
       <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
         <SideNav />
 
-        {/* Left ad column — mirrors the right one */}
-        <div
-          className="hidden lg:flex lg:flex-col items-center gap-2 shrink-0 pt-12"
-          style={{ width: 240 }}
-        >
-          <BannerAd />
-          <p className="text-[11px] text-[#5a5a62]">Ads help keep clipdrop free</p>
+        {/* width is fixed at 240; the ad itself (160 wide) sits inside a
+            centered wrapper so left/right margins are explicitly equal,
+            not just assumed from flex centering. */}
+        <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
+          <div className="flex flex-col items-center gap-2" style={{ width: 160, margin: "0 auto" }}>
+            <BannerAd adKey={LEFT_AD_KEY} />
+            <p className="text-[11px] text-[#5a5a62] text-center">Ads help keep clipdrop free</p>
+          </div>
         </div>
 
-        {/* Center feed — width is inline-styled inside VideoFeed itself */}
         <div className="flex-1 flex justify-center px-4 sm:px-6 py-8">
           <div style={{ width: "100%", maxWidth: 520 }}>
             <VideoFeed videos={videos} />
           </div>
         </div>
 
-        {/* Right ad column */}
-        <div
-          className="hidden lg:flex lg:flex-col items-center gap-2 shrink-0 pt-12"
-          style={{ width: 240 }}
-        >
-          <BannerAd />
-          <p className="text-[11px] text-[#5a5a62]">Ads help keep clipdrop free</p>
+        <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
+          <div className="flex flex-col items-center gap-2" style={{ width: 160, margin: "0 auto" }}>
+            <BannerAd adKey={RIGHT_AD_KEY} />
+            <p className="text-[11px] text-[#5a5a62] text-center">Ads help keep clipdrop free</p>
+          </div>
         </div>
       </div>
     </main>
