@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getVideo, incrementViews } from "@/lib/videoStore";
+import { getVideo } from "@/lib/videoStore";
 import { currentUser } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
@@ -47,14 +47,12 @@ export default async function WatchPage({
 
     if (!video) notFound();
 
-    // Counts once per visit to this page. generateMetadata above also loads
-    // the video but never calls this, so it doesn't double-count.
-    const views = await incrementViews(videoId);
-
-    // Only the actual uploader sees the delete button — this page is public,
-    // so most visitors here aren't signed in as this video's owner at all.
+    // Views are counted only by ViewTracker below (client-side, checks
+    // localStorage, and the API it calls also skips the uploader's own
+    // views). No server-side increment here — that was the bug causing
+    // the double-count.
     const viewer = await currentUser();
-    const isOwner = Boolean(viewer?.username) && viewer!.username === video.uploaderName;
+    const isOwner = viewer !== null && viewer.username === video.uploaderName;
 
     return (
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
