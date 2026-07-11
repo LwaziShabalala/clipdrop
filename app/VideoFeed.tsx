@@ -85,6 +85,12 @@ function FeedCard({ video }: { video: VideoRecord }) {
     const [muted, setMuted] = useState(true);
     const [playing, setPlaying] = useState(false);
 
+    // Landscape videos get shrunk-to-fit (with letterboxing) instead of
+    // cropped to fill — cropping a wide video into this tall 9:16 slot
+    // would slice off both sides and only show a thin vertical strip of
+    // the middle.
+    const isLandscape = video.width > video.height;
+
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -145,7 +151,7 @@ function FeedCard({ video }: { video: VideoRecord }) {
                 playsInline
                 preload="metadata"
                 onClick={() => setPlaying((p) => !p)}
-                className="w-full h-full object-cover cursor-pointer"
+                className={`w-full h-full cursor-pointer ${isLandscape ? "object-contain" : "object-cover"}`}
             />
 
             {!playing && (
