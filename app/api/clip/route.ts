@@ -20,11 +20,17 @@ const MAX_CLIP_SECONDS = 15;
 // comfortably under its ~20MB practical image cap.
 const MAX_GIF_BYTES = 8 * 1024 * 1024; // 8MB hard ceiling
 
+// Retuned based on real timing/size data from production: the old starting
+// tier (640px) came back ~7x over the size limit on real content and never
+// actually succeeded — every attempt just burned a full, expensive encoding
+// pass for nothing. Starting smaller, and adding a genuinely aggressive
+// final tier, means fewer wasted passes and an actual chance of landing
+// under the limit instead of running out of tiers still oversized.
 const GIF_TIERS = [
-  { width: 640, fps: 12 },
-  { width: 540, fps: 12 },
   { width: 480, fps: 10 },
-  { width: 400, fps: 8 },
+  { width: 380, fps: 8 },
+  { width: 300, fps: 8 },
+  { width: 240, fps: 6 },
 ];
 
 async function encodeGif(
@@ -114,8 +120,6 @@ export async function POST(req: NextRequest) {
     await writeFile(sourcePath, Buffer.from(await sourceRes.arrayBuffer()));
     console.timeEnd(`[${clipId}] 1-download-source`);
 
-    // Video's real dimensions are already stored on its VideoRecord — no
-    // need to re-probe. Trimming/watermarking don't change frame size.
     const width = video.width;
     const height = video.height;
 
@@ -142,8 +146,6 @@ export async function POST(req: NextRequest) {
     ]);
     console.timeEnd(`[${clipId}] 2-trim-watermark`);
 
-    // GIF: step down through quality tiers until the file is safely under
-    // Reddit's practical size ceiling.
     console.time(`[${clipId}] 3-gif-encode`);
     let gifSize = Infinity;
     for (let i = 0; i < GIF_TIERS.length; i++) {
@@ -181,7 +183,6 @@ export async function POST(req: NextRequest) {
     ]);
     console.timeEnd(`[${clipId}] 5-r2-upload`);
 
-    // Clean up local work files, including the downloaded source
     await Promise.all([
       unlink(sourcePath).catch(() => {}),
       unlink(mp4Out).catch(() => {}),
