@@ -7,7 +7,15 @@ const isProtectedRoute = createRouteMatcher(["/upload(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
-    const { isAuthenticated } = await auth();
+    // treatPendingAsSignedOut: false — Clerk sessions have a "pending"
+    // state that's neither fully signed-in nor signed-out, and by default
+    // it's treated as signed-out. This app doesn't use anything (like
+    // Organizations) that legitimately needs someone blocked while
+    // pending, so a pending session should just count as signed-in here.
+    // This was already fixed once before and is what was causing the
+    // intermittent "need to be signed in" — this file just didn't have it
+    // anymore.
+    const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
     if (!isAuthenticated) {
       // Built manually on purpose — Clerk's own auto-redirect has a known
       // bug on Next.js 16 where it doesn't reliably read the sign-in URL
