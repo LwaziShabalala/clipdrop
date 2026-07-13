@@ -17,27 +17,33 @@ const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
+  const reqId = randomUUID().slice(0, 8);
+  console.time(`[${reqId}] TOTAL`);
+
   try {
-    // Gate on auth() — a fast, local session check. currentUser() below
-    // makes an actual network call to Clerk's API for profile details, which
-    // can occasionally fail even for a genuinely signed-in user, so it's
-    // only used for the nice-to-have name/photo, never as the access check.
+    console.time(`[${reqId}] 1-auth-check`);
     const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
+    console.timeEnd(`[${reqId}] 1-auth-check`);
     if (!isAuthenticated) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
 
+    console.time(`[${reqId}] 2-current-user`);
     const user = await currentUser();
+    console.timeEnd(`[${reqId}] 2-current-user`);
     const uploaderName = user?.username ?? "Anonymous";
     const uploaderImageUrl = user?.imageUrl;
 
+    console.time(`[${reqId}] 3-parse-formdata`);
     const formData = await req.formData();
     const file = formData.get("video") as File | null;
     const titleInput = (formData.get("title") as string | null)?.trim();
+    console.timeEnd(`[${reqId}] 3-parse-formdata`);
 
     if (!file) {
       return NextResponse.json({ error: "No video file provided" }, { status: 400 });
     }
+    console.log(`[${reqId}] file size: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
 
     if (!file.type.startsWith("video/")) {
       return NextResponse.json({ error: "File must be a video" }, { status: 400 });
@@ -55,19 +61,24 @@ export async function POST(req: NextRequest) {
     const filename = `${id}${ext}`;
     const filepath = path.join(UPLOAD_DIR, filename);
 
+    console.time(`[${reqId}] 4-write-local-file`);
     const bytes = Buffer.from(await file.arrayBuffer());
     await writeFile(filepath, bytes);
+    console.timeEnd(`[${reqId}] 4-write-local-file`);
 
     const videoId = randomUUID();
     const title = titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
 
-    // Start the video's R2 upload right away — it only needs the raw bytes
-    // we already have in memory, not anything from ffprobe/ffmpeg below. It
-    // runs in the background while those steps happen, instead of waiting
-    // for them to finish first.
-    const videoUploadPromise = uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4");
+    // Start the video's R2 upload right away — runs in the background
+    // while ffprobe/ffmpeg (below) happen.
+    console.time(`[${reqId}] 5-r2-video-upload`);
+    const videoUploadPromise = uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4")
+      .then((url) => {
+        console.timeEnd(`[${reqId}] 5-r2-video-upload`);
+        return url;
+      });
 
-    // Probe video duration + dimensions with ffprobe
+    console.time(`[${reqId}] 6-ffprobe`);
     const { stdout } = await execFileAsync("ffprobe", [
       "-v", "error",
       "-select_streams", "v:0",
@@ -76,6 +87,7 @@ export async function POST(req: NextRequest) {
       "-of", "json",
       filepath,
     ]);
+    console.timeEnd(`[${reqId}] 6-ffprobe`);
 
     const probe = JSON.parse(stdout);
     const stream = probe.streams?.[0] ?? {};
@@ -87,7 +99,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not read video duration" }, { status: 400 });
     }
 
-    // Grab a poster frame for the watch page / gallery thumbnail
+    console.time(`[${reqId}] 7-thumbnail-generate`);
     const thumbPath = path.join(UPLOAD_DIR, `${id}.jpg`);
     await execFileAsync("ffmpeg", [
       "-y",
@@ -97,13 +109,22 @@ export async function POST(req: NextRequest) {
       "-q:v", "2",
       thumbPath,
     ]);
+    console.timeEnd(`[${reqId}] 7-thumbnail-generate`);
+
     const thumbBuf = await readFile(thumbPath);
-    const thumbUploadPromise = uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg");
 
-    // Now wait for both uploads (video may already be done or nearly done,
-    // since it's had a head start while ffprobe/ffmpeg were running).
+    console.time(`[${reqId}] 8-r2-thumb-upload`);
+    const thumbUploadPromise = uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg")
+      .then((url) => {
+        console.timeEnd(`[${reqId}] 8-r2-thumb-upload`);
+        return url;
+      });
+
+    console.time(`[${reqId}] 9-wait-both-uploads`);
     const [videoUrl, thumbUrl] = await Promise.all([videoUploadPromise, thumbUploadPromise]);
+    console.timeEnd(`[${reqId}] 9-wait-both-uploads`);
 
+    console.time(`[${reqId}] 10-db-save`);
     await saveVideo({
       videoId,
       title,
@@ -117,6 +138,9 @@ export async function POST(req: NextRequest) {
       uploaderImageUrl,
       createdAt: new Date().toISOString(),
     });
+    console.timeEnd(`[${reqId}] 10-db-save`);
+
+    console.timeEnd(`[${reqId}] TOTAL`);
 
     return NextResponse.json({
       videoId,
@@ -126,7 +150,8 @@ export async function POST(req: NextRequest) {
       previewUrl: videoUrl,
     });
   } catch (err) {
-    console.error("Upload error:", err);
+    console.timeEnd(`[${reqId}] TOTAL`);
+    console.error(`[${reqId}] Upload error:`, err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }
