@@ -4,7 +4,14 @@ import { auth } from "@clerk/nextjs/server";
 import { getPresignedUploadUrl } from "@/lib/r2";
 
 export async function POST(req: NextRequest) {
-  const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
+  const reqId = randomUUID().slice(0, 8);
+  const hasCookie = (req.headers.get("cookie")?.length ?? 0) > 0;
+  const cookiePreview = req.headers.get("cookie")?.slice(0, 60) ?? "none";
+  console.log(`[init:${reqId}] has cookie header: ${hasCookie}, preview: ${cookiePreview}`);
+
+  const { isAuthenticated, userId } = await auth({ treatPendingAsSignedOut: false });
+  console.log(`[init:${reqId}] isAuthenticated: ${isAuthenticated}, userId: ${userId}`);
+
   if (!isAuthenticated) {
     return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
   }
