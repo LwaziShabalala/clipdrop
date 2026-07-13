@@ -45,10 +45,17 @@ function VideoPreview({ file }: { file: File }) {
   );
 }
 
+function cleanupFilename(filename: string): string {
+  const withoutExt = filename.replace(/\.[^/.]+$/, "");
+  const withSpaces = withoutExt.replace(/[_-]+/g, " ");
+  const withoutLeadingNumber = withSpaces.replace(/^\d+\s*/, "");
+  const trimmed = withoutLeadingNumber.trim();
+  return trimmed || withSpaces.trim() || "Untitled video";
+}
+
 export default function BulkUploadPage() {
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFilesSelected = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith("video/"));
@@ -56,7 +63,7 @@ export default function BulkUploadPage() {
 
     const newItems: QueueItem[] = fileArray.map((file) => ({
       file,
-      title: file.name.replace(/\.[^/.]+$/, ""),
+      title: cleanupFilename(file.name),
       status: "pending",
       progress: 0,
     }));
@@ -194,7 +201,6 @@ export default function BulkUploadPage() {
   const reset = () => {
     setItems([]);
     setStage("select");
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const doneCount = items.filter((i) => i.status === "done").length;
@@ -218,13 +224,12 @@ export default function BulkUploadPage() {
         </p>
 
         {stage === "select" && (
-          <div
+          <label
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
               handleFilesSelected(e.dataTransfer.files);
             }}
-            onClick={() => fileInputRef.current?.click()}
             className="rounded-2xl border-2 border-dashed border-[#26262c] hover:border-[#3a3a42] flex flex-col items-center justify-center gap-3 py-24 cursor-pointer transition-colors"
           >
             <div className="w-12 h-12 rounded-full bg-[#1c1c20] flex items-center justify-center text-xl">
@@ -233,7 +238,6 @@ export default function BulkUploadPage() {
             <p className="text-sm font-medium">drop multiple videos, or click to browse</p>
             <p className="text-xs text-[#5a5a62]">mp4, mov, webm · up to 500MB each</p>
             <input
-              ref={fileInputRef}
               type="file"
               accept="video/*"
               multiple
@@ -242,7 +246,7 @@ export default function BulkUploadPage() {
                 if (e.target.files) handleFilesSelected(e.target.files);
               }}
             />
-          </div>
+          </label>
         )}
 
         {stage === "queue" && (

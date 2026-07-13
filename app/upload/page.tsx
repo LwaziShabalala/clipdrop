@@ -51,7 +51,6 @@ function UploadPageInner() {
   const [currentTime, setCurrentTime] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Arrived from a video's watch page ("make a clip") — load that video and
   // go straight to trimming instead of showing the drop zone.
@@ -222,7 +221,6 @@ function UploadPageInner() {
     setClip(null);
     setCaption("");
     setError("");
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -238,7 +236,7 @@ function UploadPageInner() {
 
       <div className="max-w-2xl mx-auto px-6 py-10">
         {stage === "idle" && (
-          <DropZone onDrop={handleDrop} onSelect={handleFileSelect} fileInputRef={fileInputRef} />
+          <DropZone onDrop={handleDrop} onSelect={handleFileSelect} />
         )}
 
         {stage === "details" && selectedFile && (
@@ -324,16 +322,14 @@ export default function UploadPage() {
 function DropZone({
   onDrop,
   onSelect,
-  fileInputRef,
 }: {
   onDrop: (e: React.DragEvent) => void;
   onSelect: (file: File) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
   return (
-    <div
+    <label
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -343,7 +339,6 @@ function DropZone({
         setDragOver(false);
         onDrop(e);
       }}
-      onClick={() => fileInputRef.current?.click()}
       className={`rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 py-24 cursor-pointer transition-colors ${dragOver ? "border-[#ff3d6e] bg-[#ff3d6e]/[0.04]" : "border-[#26262c] hover:border-[#3a3a42]"
         }`}
     >
@@ -353,7 +348,6 @@ function DropZone({
       <p className="text-sm font-medium">drop a video, or click to browse</p>
       <p className="text-xs text-[#5a5a62]">mp4, mov, webm · up to 500MB</p>
       <input
-        ref={fileInputRef}
         type="file"
         accept="video/*"
         className="hidden"
@@ -362,7 +356,7 @@ function DropZone({
           if (file) onSelect(file);
         }}
       />
-    </div>
+    </label>
   );
 }
 
