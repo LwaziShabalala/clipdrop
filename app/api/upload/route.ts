@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir, readFile } from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
@@ -62,21 +63,31 @@ export async function POST(req: NextRequest) {
     const filepath = path.join(UPLOAD_DIR, filename);
 
     console.time(`[${reqId}] 4-write-local-file`);
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(filepath, bytes);
+    // This block is the only place the full file sits in memory at once —
+    // as soon as it's written to disk, nothing below holds onto `bytes`
+    // anymore, so it's free to be garbage collected instead of staying
+    // alive through ffprobe/ffmpeg/upload like it did before.
+    {
+      const bytes = Buffer.from(await file.arrayBuffer());
+      await writeFile(filepath, bytes);
+    }
     console.timeEnd(`[${reqId}] 4-write-local-file`);
 
     const videoId = randomUUID();
     const title = titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
 
-    // Start the video's R2 upload right away — runs in the background
-    // while ffprobe/ffmpeg (below) happen.
+    // Streams straight from the file already on disk instead of reusing an
+    // in-memory buffer — keeps peak memory lower, especially noticeable
+    // when several uploads happen back-to-back in a bulk batch.
     console.time(`[${reqId}] 5-r2-video-upload`);
-    const videoUploadPromise = uploadToR2(`videos/${videoId}${ext}`, bytes, file.type || "video/mp4")
-      .then((url) => {
-        console.timeEnd(`[${reqId}] 5-r2-video-upload`);
-        return url;
-      });
+    const videoUploadPromise = uploadToR2(
+      `videos/${videoId}${ext}`,
+      createReadStream(filepath),
+      file.type || "video/mp4"
+    ).then((url) => {
+      console.timeEnd(`[${reqId}] 5-r2-video-upload`);
+      return url;
+    });
 
     console.time(`[${reqId}] 6-ffprobe`);
     const { stdout } = await execFileAsync("ffprobe", [

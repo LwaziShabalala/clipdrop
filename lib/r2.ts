@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import type { Readable } from "stream";
 
 const ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
 const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
@@ -19,7 +20,7 @@ export const r2Client = new S3Client({
 
 export async function uploadToR2(
   key: string,
-  body: Buffer,
+  body: Buffer | Readable,
   contentType: string
 ): Promise<string> {
   await r2Client.send(
