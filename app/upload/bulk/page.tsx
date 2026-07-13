@@ -59,6 +59,7 @@ export default function BulkUploadPage() {
     try {
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: item.file.name,
@@ -98,6 +99,7 @@ export default function BulkUploadPage() {
 
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videoId, key, title: item.title.trim() }),
       });

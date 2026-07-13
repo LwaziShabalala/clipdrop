@@ -109,6 +109,7 @@ function UploadPageInner() {
     try {
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: selectedFile.name,
@@ -149,6 +150,7 @@ function UploadPageInner() {
 
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videoId, key, title: title.trim() }),
       });
