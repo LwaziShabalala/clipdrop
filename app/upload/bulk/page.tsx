@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -16,6 +17,7 @@ interface QueueItem {
 type Stage = "select" | "queue" | "uploading" | "done";
 
 export default function BulkUploadPage() {
+  const { getToken } = useAuth();
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,12 +45,19 @@ export default function BulkUploadPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const uploadOne = (index: number): Promise<void> => {
-    return new Promise((resolve) => {
-      setItems((prev) =>
-        prev.map((it, i) => (i === index ? { ...it, status: "uploading" } : it))
-      );
+  const uploadOne = async (index: number): Promise<void> => {
+    setItems((prev) =>
+      prev.map((it, i) => (i === index ? { ...it, status: "uploading" } : it))
+    );
 
+    // Clerk session tokens expire after 60 seconds. A bulk batch easily
+    // takes longer than that in total across several sequential files, so
+    // relying on whatever token the browser had from page load was going
+    // stale partway through — this forces a genuinely fresh one right
+    // before every single upload, not just the first.
+    const token = await getToken({ skipCache: true });
+
+    return new Promise((resolve) => {
       const item = items[index];
       const formData = new FormData();
       formData.append("video", item.file);
@@ -101,21 +110,17 @@ export default function BulkUploadPage() {
       });
 
       xhr.open("POST", "/api/upload");
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
       xhr.send(formData);
     });
   };
 
   const startBulkUpload = async () => {
     setStage("uploading");
-    // Sequential, with a short pause between each — uploading many at once
-    // (or firing them off too rapidly back-to-back) was overwhelming
-    // Clerk's session verification, causing intermittent "need to be
-    // signed in" failures that only showed up in bulk, not single uploads.
     for (let i = 0; i < items.length; i++) {
       await uploadOne(i);
-      if (i < items.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      }
     }
     setStage("done");
   };
