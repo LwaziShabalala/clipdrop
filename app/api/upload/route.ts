@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir, readFile } from "fs/promises";
-import { createReadStream } from "fs";
+import { mkdir, readFile } from "fs/promises";
+import { createReadStream, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
+import { Readable } from "stream";
 import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
@@ -29,12 +31,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
 
-    // Wrapped in try/catch on purpose — this is only used for the nice-to-
-    // have name/photo, never as the access check (that's auth() above).
-    // Previously, if this single network call to Clerk hiccupped, it took
-    // the entire upload down with it — which is exactly what the dangling,
-    // incomplete log entries during bulk uploads were showing: everything
-    // stopping right after this step, every time.
     console.time(`[${reqId}] 2-current-user`);
     let uploaderName = "Anonymous";
     let uploaderImageUrl: string | undefined;
@@ -74,11 +70,17 @@ export async function POST(req: NextRequest) {
     const filename = `${id}${ext}`;
     const filepath = path.join(UPLOAD_DIR, filename);
 
+    // Streams the incoming file straight to disk in small chunks — never
+    // holds the full file in memory at once, not even briefly. Previously
+    // this did `Buffer.from(await file.arrayBuffer())` first, which for a
+    // large file (confirmed: a 186MB upload triggered a SIGKILL — the
+    // server getting forcibly killed for using too much memory) was the
+    // actual root cause of these crashes.
     console.time(`[${reqId}] 4-write-local-file`);
-    {
-      const bytes = Buffer.from(await file.arrayBuffer());
-      await writeFile(filepath, bytes);
-    }
+    await pipeline(
+      Readable.fromWeb(file.stream() as any),
+      createWriteStream(filepath)
+    );
     console.timeEnd(`[${reqId}] 4-write-local-file`);
 
     const videoId = randomUUID();

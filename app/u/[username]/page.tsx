@@ -84,32 +84,33 @@ export default async function ProfilePage({
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        {videos.map((video) => {
-                            const ratio = video.width && video.height ? video.width / video.height : 9 / 16;
-                            return (
-                                <a
-                                    key={video.videoId}
-                                    href={`/v/${video.videoId}`}
-                                    className="group block rounded-xl overflow-hidden border border-[#26262c] bg-[#111114] hover:border-[#3a3a42] transition-colors"
-                                >
-                                    <div className="relative bg-black" style={{ aspectRatio: ratio }}>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                            src={video.thumbUrl}
-                                            alt={video.title}
-                                            className="absolute inset-0 w-full h-full object-cover"
-                                            loading="lazy"
-                                        />
-                                    </div>
-                                    <div className="px-3 py-2.5">
-                                        <p className="text-sm text-[#d4d4d8] truncate">{video.title}</p>
-                                        <p className="text-[11px] text-[#5a5a62] mt-0.5">
-                                            {formatCount(video.views ?? 0)} views
-                                        </p>
-                                    </div>
-                                </a>
-                            );
-                        })}
+                        {videos.map((video) => (
+                            <a
+                                key={video.videoId}
+                                href={`/v/${video.videoId}`}
+                                className="group block rounded-xl overflow-hidden border border-[#26262c] bg-[#111114] hover:border-[#3a3a42] transition-colors"
+                            >
+                                {/* Fixed 9:16 for every card, regardless of the source
+                    video's own shape — thumbnails crop to fit instead of
+                    each card taking on a different size. Consistent grid,
+                    same as how Instagram/YouTube/TikTok profile grids work. */}
+                                <div className="relative bg-black" style={{ aspectRatio: "9 / 16" }}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={video.thumbUrl}
+                                        alt={video.title}
+                                        className="absolute inset-0 w-full h-full object-cover"
+                                        loading="lazy"
+                                    />
+                                </div>
+                                <div className="px-3 py-2.5">
+                                    <p className="text-sm text-[#d4d4d8] truncate">{video.title}</p>
+                                    <p className="text-[11px] text-[#5a5a62] mt-0.5">
+                                        {formatCount(video.views ?? 0)} views
+                                    </p>
+                                </div>
+                            </a>
+                        ))}
                     </div>
                 )}
             </div>
