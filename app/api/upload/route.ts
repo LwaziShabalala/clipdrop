@@ -18,10 +18,6 @@ const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
-  // Full UUID now, not just the first 8 characters — with several uploads
-  // firing close together in a bulk batch, an 8-character ID was short
-  // enough to actually collide between two different requests, which made
-  // their log lines interleave and look impossibly out of order.
   const reqId = randomUUID();
   console.time(`[${reqId}] TOTAL`);
 
@@ -33,11 +29,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
 
+    // Wrapped in try/catch on purpose — this is only used for the nice-to-
+    // have name/photo, never as the access check (that's auth() above).
+    // Previously, if this single network call to Clerk hiccupped, it took
+    // the entire upload down with it — which is exactly what the dangling,
+    // incomplete log entries during bulk uploads were showing: everything
+    // stopping right after this step, every time.
     console.time(`[${reqId}] 2-current-user`);
-    const user = await currentUser();
+    let uploaderName = "Anonymous";
+    let uploaderImageUrl: string | undefined;
+    try {
+      const user = await currentUser();
+      uploaderName = user?.username ?? "Anonymous";
+      uploaderImageUrl = user?.imageUrl;
+    } catch (err) {
+      console.log(`[${reqId}] currentUser() failed, continuing as Anonymous:`, err);
+    }
     console.timeEnd(`[${reqId}] 2-current-user`);
-    const uploaderName = user?.username ?? "Anonymous";
-    const uploaderImageUrl = user?.imageUrl;
 
     console.time(`[${reqId}] 3-parse-formdata`);
     const formData = await req.formData();
