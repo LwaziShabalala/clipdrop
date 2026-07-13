@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 
 type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -24,9 +25,17 @@ interface ClipResult {
 
 const MAX_CLIP_SECONDS = 15;
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms)),
+  ]);
+}
+
 function UploadPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { getToken } = useAuth();
   const existingVideoId = searchParams.get("videoId");
 
   const [stage, setStage] = useState<Stage>(existingVideoId ? "loading" : "idle");
@@ -107,10 +116,22 @@ function UploadPageInner() {
     setStage("uploading");
 
     try {
+      let freshToken: string | null = null;
+      try {
+        freshToken = await withTimeout(getToken({ skipCache: true }), 10000);
+      } catch {
+        setError("Couldn't verify your session — try again");
+        setStage("error");
+        return;
+      }
+
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
+        },
         body: JSON.stringify({
           filename: selectedFile.name,
           contentType: selectedFile.type,
@@ -148,10 +169,22 @@ function UploadPageInner() {
 
       setUploadProgress(95);
 
+      let finalizeToken: string | null = null;
+      try {
+        finalizeToken = await withTimeout(getToken({ skipCache: true }), 10000);
+      } catch {
+        // fall through with credentials: "include" only — better than
+        // failing outright if just this refresh hiccups after the file
+        // already made it to storage
+      }
+
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(finalizeToken ? { Authorization: `Bearer ${finalizeToken}` } : {}),
+        },
         body: JSON.stringify({ videoId, key, title: title.trim() }),
       });
       const finalizeData = await finalizeRes.json();
