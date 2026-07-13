@@ -2,6 +2,7 @@ import { listVideos } from "@/lib/videoStore";
 import { VideoFeed } from "./VideoFeed";
 import { SideNav } from "./SideNav";
 import { BannerAd } from "./BannerAd";
+import Script from "next/script";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,18 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
+      {/* MyBid — Popunder/Web-push/In-page. Scoped to just this page on
+          purpose: this used to load site-wide from the root layout, and
+          its popunder trigger was very likely swallowing clicks on other
+          pages — including the upload button, which shouldn't be anywhere
+          near an ad's reach at all. */}
+      <Script
+        async
+        src="https://js.mbidadm.com/static/scripts.js"
+        data-admpid="447595"
+        strategy="lazyOnload"
+      />
+
       <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-20">
         <a href="/" className="font-bold tracking-tight text-lg">
           clip<span className="text-[#ff3d6e]">drop</span>
