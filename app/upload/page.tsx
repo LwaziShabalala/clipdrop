@@ -78,8 +78,6 @@ function UploadPageInner() {
     })();
   }, [existingVideoId]);
 
-  // Picking a file no longer uploads immediately — it goes to a details
-  // screen first so a title can be added or edited.
   const handleFileSelect = useCallback((file: File) => {
     setError("");
     setSelectedFile(file);
@@ -96,54 +94,78 @@ function UploadPageInner() {
     [handleFileSelect]
   );
 
-  // Uses XHR instead of fetch specifically because fetch has no reliable
-  // way to report upload progress — XHR's upload.onprogress does.
-  const handleConfirmUpload = useCallback(() => {
+  // Direct-to-storage upload: the file goes straight from the browser to
+  // R2, never through our own server. Our server's only job is (1) handing
+  // out a temporary upload permission first, and (2) processing the file
+  // afterward (thumbnail, duration, database) once it's already there —
+  // it never has to receive or hold the file itself, so its memory use no
+  // longer depends on file size at all.
+  const handleConfirmUpload = useCallback(async () => {
     if (!selectedFile) return;
     setError("");
     setUploadProgress(0);
     setStage("uploading");
 
-    const formData = new FormData();
-    formData.append("video", selectedFile);
-    formData.append("title", title.trim());
-
-    const xhr = new XMLHttpRequest();
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable) {
-        setUploadProgress(Math.round((e.loaded / e.total) * 100));
+    try {
+      const initRes = await fetch("/api/upload/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: selectedFile.name,
+          contentType: selectedFile.type,
+          size: selectedFile.size,
+        }),
+      });
+      const initData = await initRes.json();
+      if (!initRes.ok) {
+        setError(initData.error || "Upload failed");
+        setStage("error");
+        return;
       }
-    });
+      const { videoId, uploadUrl, key } = initData as {
+        videoId: string;
+        uploadUrl: string;
+        key: string;
+      };
 
-    xhr.addEventListener("load", () => {
-      let data: { videoId?: string; error?: string } = {};
-      try {
-        data = JSON.parse(xhr.responseText);
-      } catch {
-        setError("Upload failed. Check your connection and try again.");
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 90));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error("Upload to storage failed"));
+        });
+        xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", selectedFile.type);
+        xhr.send(selectedFile);
+      });
+
+      setUploadProgress(95);
+
+      const finalizeRes = await fetch("/api/upload/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId, key, title: title.trim() }),
+      });
+      const finalizeData = await finalizeRes.json();
+
+      if (!finalizeRes.ok) {
+        setError(finalizeData.error || "Processing failed");
         setStage("error");
         return;
       }
 
-      if (xhr.status < 200 || xhr.status >= 300) {
-        setError(data.error || "Upload failed");
-        setStage("error");
-        return;
-      }
-
-      // Uploading publishes the video — it's watchable immediately.
-      // Clip-making happens from the watch page as a separate step.
-      router.push(`/v/${data.videoId}`);
-    });
-
-    xhr.addEventListener("error", () => {
+      setUploadProgress(100);
+      router.push(`/v/${finalizeData.videoId}`);
+    } catch {
       setError("Upload failed. Check your connection and try again.");
       setStage("error");
-    });
-
-    xhr.open("POST", "/api/upload");
-    xhr.send(formData);
+    }
   }, [selectedFile, title, router]);
 
   const handleGenerate = async () => {
@@ -173,8 +195,6 @@ function UploadPageInner() {
     }
   };
 
-  // "make another clip" — same video, pick a new range. There's no file to
-  // re-pick, so this goes back to trimming rather than resetting to idle.
   const backToTrimming = () => {
     setClip(null);
     setCaption("");
@@ -240,7 +260,7 @@ function UploadPageInner() {
               />
             </div>
             <p className="text-sm text-[#8a8a92]">
-              {uploadProgress < 100 ? `uploading… ${uploadProgress}%` : "processing…"}
+              {uploadProgress < 95 ? `uploading… ${uploadProgress}%` : "processing…"}
             </p>
           </div>
         )}

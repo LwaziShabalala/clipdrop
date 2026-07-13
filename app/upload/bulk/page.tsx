@@ -46,50 +46,71 @@ export default function BulkUploadPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // One raw attempt — plain cookie-based auth, same as the regular
-  // single-upload page (which reliably works), no manual token handling.
-  const uploadAttempt = (
+  // Direct-to-storage upload, same as the single-upload page: the file
+  // goes straight from the browser to R2, never through our own server.
+  // This is what actually fixes bulk upload's memory crashes — the server
+  // never has to receive or hold any of the files at all, so its memory
+  // use doesn't grow with file size or how many uploads happen in a row.
+  const uploadAttempt = async (
     index: number
   ): Promise<{ success: boolean; videoId?: string; error?: string }> => {
-    return new Promise((resolve) => {
-      const item = items[index];
-      const formData = new FormData();
-      formData.append("video", item.file);
-      formData.append("title", item.title.trim());
+    const item = items[index];
 
-      const xhr = new XMLHttpRequest();
+    try {
+      const initRes = await fetch("/api/upload/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: item.file.name,
+          contentType: item.file.type,
+          size: item.file.size,
+        }),
+      });
+      const initData = await initRes.json();
+      if (!initRes.ok) {
+        return { success: false, error: initData.error || "Upload failed" };
+      }
+      const { videoId, uploadUrl, key } = initData as {
+        videoId: string;
+        uploadUrl: string;
+        key: string;
+      };
 
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          setItems((prev) =>
-            prev.map((it, i) => (i === index ? { ...it, progress: pct } : it))
-          );
-        }
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 90);
+            setItems((prev) => prev.map((it, i) => (i === index ? { ...it, progress: pct } : it)));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error("Upload to storage failed"));
+        });
+        xhr.addEventListener("error", () => reject(new Error("Network error")));
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", item.file.type);
+        xhr.send(item.file);
       });
 
-      xhr.addEventListener("load", () => {
-        let data: { videoId?: string; error?: string } = {};
-        try {
-          data = JSON.parse(xhr.responseText);
-        } catch {
-          data = { error: "Upload failed" };
-        }
+      setItems((prev) => prev.map((it, i) => (i === index ? { ...it, progress: 95 } : it)));
 
-        if (xhr.status >= 200 && xhr.status < 300 && data.videoId) {
-          resolve({ success: true, videoId: data.videoId });
-        } else {
-          resolve({ success: false, error: data.error || "Upload failed" });
-        }
+      const finalizeRes = await fetch("/api/upload/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId, key, title: item.title.trim() }),
       });
+      const finalizeData = await finalizeRes.json();
 
-      xhr.addEventListener("error", () => {
-        resolve({ success: false, error: "Network error" });
-      });
+      if (!finalizeRes.ok) {
+        return { success: false, error: finalizeData.error || "Processing failed" };
+      }
 
-      xhr.open("POST", "/api/upload");
-      xhr.send(formData);
-    });
+      return { success: true, videoId: finalizeData.videoId };
+    } catch {
+      return { success: false, error: "Network error" };
+    }
   };
 
   // Retries automatically on failure — a transient hiccup on one attempt

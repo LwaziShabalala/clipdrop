@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Readable } from "stream";
 
 const ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
@@ -29,13 +30,26 @@ export async function uploadToR2(
       Key: key,
       Body: body,
       ContentType: contentType,
-      // Every upload gets a fresh, unique key and is never modified in
-      // place after creation — so it's safe to tell browsers/CDNs to cache
-      // it essentially forever instead of re-checking or re-fetching it.
       CacheControl: "public, max-age=31536000, immutable",
     })
   );
   return `${R2_PUBLIC_URL}/${key}`;
+}
+
+// Generates a temporary, secure URL that lets the browser upload a file
+// directly to R2 — bypassing our own server entirely for the actual file
+// bytes. This is the core of direct upload: the server hands out
+// permission without ever touching or holding the file itself.
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(r2Client, command, { expiresIn: 3600 });
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
