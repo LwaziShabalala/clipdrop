@@ -18,7 +18,11 @@ const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = path.join(os.tmpdir(), "clipdrop-uploads");
 
 export async function POST(req: NextRequest) {
-  const reqId = randomUUID().slice(0, 8);
+  // Full UUID now, not just the first 8 characters — with several uploads
+  // firing close together in a bulk batch, an 8-character ID was short
+  // enough to actually collide between two different requests, which made
+  // their log lines interleave and look impossibly out of order.
+  const reqId = randomUUID();
   console.time(`[${reqId}] TOTAL`);
 
   try {
@@ -63,10 +67,6 @@ export async function POST(req: NextRequest) {
     const filepath = path.join(UPLOAD_DIR, filename);
 
     console.time(`[${reqId}] 4-write-local-file`);
-    // This block is the only place the full file sits in memory at once —
-    // as soon as it's written to disk, nothing below holds onto `bytes`
-    // anymore, so it's free to be garbage collected instead of staying
-    // alive through ffprobe/ffmpeg/upload like it did before.
     {
       const bytes = Buffer.from(await file.arrayBuffer());
       await writeFile(filepath, bytes);
@@ -76,9 +76,6 @@ export async function POST(req: NextRequest) {
     const videoId = randomUUID();
     const title = titleInput || path.basename(file.name, path.extname(file.name)).trim() || "Untitled video";
 
-    // Streams straight from the file already on disk instead of reusing an
-    // in-memory buffer — keeps peak memory lower, especially noticeable
-    // when several uploads happen back-to-back in a bulk batch.
     console.time(`[${reqId}] 5-r2-video-upload`);
     const videoUploadPromise = uploadToR2(
       `videos/${videoId}${ext}`,
