@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useAuth } from "@clerk/nextjs";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -19,15 +18,7 @@ type Stage = "select" | "queue" | "uploading" | "done";
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms)),
-  ]);
-}
-
 export default function BulkUploadPage() {
-  const { getToken } = useAuth();
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,20 +57,10 @@ export default function BulkUploadPage() {
     const item = items[index];
 
     try {
-      let freshToken: string | null = null;
-      try {
-        freshToken = await withTimeout(getToken({ skipCache: true }), 10000);
-      } catch {
-        return { success: false, error: "Couldn't verify your session" };
-      }
-
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(freshToken ? { Authorization: `Bearer ${freshToken}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: item.file.name,
           contentType: item.file.type,
@@ -116,20 +97,10 @@ export default function BulkUploadPage() {
 
       setItems((prev) => prev.map((it, i) => (i === index ? { ...it, progress: 95 } : it)));
 
-      let finalizeToken: string | null = null;
-      try {
-        finalizeToken = await withTimeout(getToken({ skipCache: true }), 10000);
-      } catch {
-        // fall through with credentials: "include" only
-      }
-
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...(finalizeToken ? { Authorization: `Bearer ${finalizeToken}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videoId, key, title: item.title.trim() }),
       });
       const finalizeData = await finalizeRes.json();
