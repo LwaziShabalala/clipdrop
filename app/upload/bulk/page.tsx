@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -17,6 +17,33 @@ type Stage = "select" | "queue" | "uploading" | "done";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
+
+// Shows an actual frame from the video file itself — no upload needed,
+// since the browser already has the file locally. Seeking to a tiny
+// offset once metadata loads is what makes the frame actually render
+// instead of showing a blank box.
+function VideoPreview({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  return (
+    <video
+      src={url ?? undefined}
+      className="w-12 h-12 rounded-md object-cover bg-black shrink-0"
+      muted
+      playsInline
+      preload="metadata"
+      onLoadedMetadata={(e) => {
+        e.currentTarget.currentTime = 0.1;
+      }}
+    />
+  );
+}
 
 export default function BulkUploadPage() {
   const [stage, setStage] = useState<Stage>("select");
@@ -226,6 +253,7 @@ export default function BulkUploadPage() {
                   key={i}
                   className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5"
                 >
+                  <VideoPreview file={item.file} />
                   <input
                     value={item.title}
                     onChange={(e) => updateTitle(i, e.target.value)}
@@ -261,6 +289,7 @@ export default function BulkUploadPage() {
                 key={i}
                 className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-3"
               >
+                <VideoPreview file={item.file} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{item.title || item.file.name}</p>
                   {item.status === "uploading" && (
@@ -293,6 +322,7 @@ export default function BulkUploadPage() {
                   key={i}
                   className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5"
                 >
+                  <VideoPreview file={item.file} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{item.title || item.file.name}</p>
                     {item.status === "error" && (
