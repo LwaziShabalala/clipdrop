@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useAuth } from "@clerk/nextjs";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -16,17 +15,10 @@ interface QueueItem {
 
 type Stage = "select" | "queue" | "uploading" | "done";
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out`)), ms)
-    ),
-  ]);
-}
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
 
 export default function BulkUploadPage() {
-  const { getToken } = useAuth();
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,31 +46,11 @@ export default function BulkUploadPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Every code path in here now either resolves normally or explicitly
-  // marks the item as "error" — nothing is left that can hang forever
-  // without updating the UI, which is what was happening before.
-  const uploadOne = async (index: number): Promise<void> => {
-    setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, status: "uploading" } : it))
-    );
-
-    let token: string | null = null;
-    try {
-      // Hard 10s cap — if refreshing the token hangs for any reason
-      // (network blip, slow response), this forces it to fail visibly
-      // instead of stalling the whole upload silently forever.
-      token = await withTimeout(getToken({ skipCache: true }), 10000, "Token refresh");
-    } catch (err) {
-      setItems((prev) =>
-        prev.map((it, i) =>
-          i === index
-            ? { ...it, status: "error", error: "Couldn't verify your session — try again" }
-            : it
-        )
-      );
-      return;
-    }
-
+  // One raw attempt — plain cookie-based auth, same as the regular
+  // single-upload page (which reliably works), no manual token handling.
+  const uploadAttempt = (
+    index: number
+  ): Promise<{ success: boolean; videoId?: string; error?: string }> => {
     return new Promise((resolve) => {
       const item = items[index];
       const formData = new FormData();
@@ -105,38 +77,60 @@ export default function BulkUploadPage() {
         }
 
         if (xhr.status >= 200 && xhr.status < 300 && data.videoId) {
-          setItems((prev) =>
-            prev.map((it, i) =>
-              i === index
-                ? { ...it, status: "done", progress: 100, videoId: data.videoId }
-                : it
-            )
-          );
+          resolve({ success: true, videoId: data.videoId });
         } else {
-          setItems((prev) =>
-            prev.map((it, i) =>
-              i === index ? { ...it, status: "error", error: data.error || "Upload failed" } : it
-            )
-          );
+          resolve({ success: false, error: data.error || "Upload failed" });
         }
-        resolve();
       });
 
       xhr.addEventListener("error", () => {
-        setItems((prev) =>
-          prev.map((it, i) =>
-            i === index ? { ...it, status: "error", error: "Network error" } : it
-          )
-        );
-        resolve();
+        resolve({ success: false, error: "Network error" });
       });
 
       xhr.open("POST", "/api/upload");
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
       xhr.send(formData);
     });
+  };
+
+  // Retries automatically on failure — a transient hiccup on one attempt
+  // doesn't permanently fail that file, it just tries again a couple of
+  // times with a short pause first.
+  const uploadOne = async (index: number): Promise<void> => {
+    setItems((prev) =>
+      prev.map((it, i) => (i === index ? { ...it, status: "uploading", progress: 0 } : it))
+    );
+
+    let result: { success: boolean; videoId?: string; error?: string } = { success: false };
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      result = await uploadAttempt(index);
+      if (result.success) break;
+
+      if (attempt < MAX_RETRIES) {
+        setItems((prev) =>
+          prev.map((it, i) =>
+            i === index ? { ...it, error: `Retrying (attempt ${attempt + 2} of ${MAX_RETRIES + 1})…` } : it
+          )
+        );
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
+
+    if (result.success) {
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === index
+            ? { ...it, status: "done", progress: 100, videoId: result.videoId, error: undefined }
+            : it
+        )
+      );
+    } else {
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === index ? { ...it, status: "error", error: result.error || "Upload failed" } : it
+        )
+      );
+    }
   };
 
   const startBulkUpload = async () => {
@@ -253,6 +247,9 @@ export default function BulkUploadPage() {
                         style={{ width: `${item.progress}%` }}
                       />
                     </div>
+                  )}
+                  {item.error && item.status === "uploading" && (
+                    <p className="text-[11px] text-[#8a8a92] mt-1">{item.error}</p>
                   )}
                 </div>
                 <StatusBadge status={item.status} />
