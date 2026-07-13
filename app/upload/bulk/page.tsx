@@ -16,6 +16,15 @@ interface QueueItem {
 
 type Stage = "select" | "queue" | "uploading" | "done";
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+    ),
+  ]);
+}
+
 export default function BulkUploadPage() {
   const { getToken } = useAuth();
   const [stage, setStage] = useState<Stage>("select");
@@ -45,17 +54,30 @@ export default function BulkUploadPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Every code path in here now either resolves normally or explicitly
+  // marks the item as "error" — nothing is left that can hang forever
+  // without updating the UI, which is what was happening before.
   const uploadOne = async (index: number): Promise<void> => {
     setItems((prev) =>
       prev.map((it, i) => (i === index ? { ...it, status: "uploading" } : it))
     );
 
-    // Clerk session tokens expire after 60 seconds. A bulk batch easily
-    // takes longer than that in total across several sequential files, so
-    // relying on whatever token the browser had from page load was going
-    // stale partway through — this forces a genuinely fresh one right
-    // before every single upload, not just the first.
-    const token = await getToken({ skipCache: true });
+    let token: string | null = null;
+    try {
+      // Hard 10s cap — if refreshing the token hangs for any reason
+      // (network blip, slow response), this forces it to fail visibly
+      // instead of stalling the whole upload silently forever.
+      token = await withTimeout(getToken({ skipCache: true }), 10000, "Token refresh");
+    } catch (err) {
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === index
+            ? { ...it, status: "error", error: "Couldn't verify your session — try again" }
+            : it
+        )
+      );
+      return;
+    }
 
     return new Promise((resolve) => {
       const item = items[index];
