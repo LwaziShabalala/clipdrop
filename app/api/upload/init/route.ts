@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { auth } from "@clerk/nextjs/server";
 import { getPresignedUploadUrl } from "@/lib/r2";
 
 export async function POST(req: NextRequest) {
   const reqId = randomUUID().slice(0, 8);
-  const cookieHeader = req.headers.get("cookie") ?? "";
-  const hasClerkSessionCookie = cookieHeader.includes("__session");
-  const hasClerkClientCookie = cookieHeader.includes("__client");
-  console.log(
-    `[init:${reqId}] cookie header length: ${cookieHeader.length}, has __session: ${hasClerkSessionCookie}, has __client: ${hasClerkClientCookie}`
-  );
+  const providedSecret = req.headers.get("x-upload-secret");
+  const isAuthorized = Boolean(providedSecret) && providedSecret === process.env.UPLOAD_SECRET;
+  console.log(`[init:${reqId}] isAuthorized: ${isAuthorized}`);
 
-  const { isAuthenticated, userId } = await auth({ treatPendingAsSignedOut: false });
-  console.log(`[init:${reqId}] isAuthenticated: ${isAuthenticated}, userId: ${userId}`);
-
-  if (!isAuthenticated) {
+  if (!isAuthorized) {
     return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
   }
 

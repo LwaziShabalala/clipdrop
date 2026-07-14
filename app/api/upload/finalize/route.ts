@@ -8,7 +8,7 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { uploadToR2, r2PublicUrl } from "@/lib/r2";
 import { saveVideo } from "@/lib/videoStore";
 
@@ -21,11 +21,15 @@ export async function POST(req: NextRequest) {
   let thumbPath = "";
 
   try {
-    const { isAuthenticated } = await auth({ treatPendingAsSignedOut: false });
-    if (!isAuthenticated) {
+    const providedSecret = req.headers.get("x-upload-secret");
+    const isAuthorized = Boolean(providedSecret) && providedSecret === process.env.UPLOAD_SECRET;
+    if (!isAuthorized) {
       return NextResponse.json({ error: "You need to be signed in to upload" }, { status: 401 });
     }
 
+    // Best-effort only — used purely for display name/photo, never as the
+    // access check (that's the passcode above). If Clerk's session happens
+    // to be valid too, great, use it; if not, fall back gracefully.
     let uploaderName = "Anonymous";
     let uploaderImageUrl: string | undefined;
     try {
@@ -96,10 +100,6 @@ export async function POST(req: NextRequest) {
     const thumbBuf = await readFile(thumbPath);
     const thumbUrl = await uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg");
 
-    // Hashtags stand in as the display title for now — no typing required
-    // at upload time. They're stored as real, separate data too, not just
-    // mashed into the title string, so a proper human-written title can be
-    // added later (e.g. by verified users) without losing the tags.
     const tags = Array.isArray(hashtags) ? hashtags.filter(Boolean) : [];
     const title = tags.length > 0 ? tags.map((t) => `#${t}`).join(" ") : "Untitled video";
 

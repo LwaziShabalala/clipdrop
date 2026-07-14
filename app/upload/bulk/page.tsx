@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { HashtagPicker } from "@/app/upload/HashtagPicker";
 import { VideoPreview } from "@/app/upload/VideoPreview";
+import { UploadGate, getUploadSecret } from "@/app/upload/UploadGate";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -21,6 +22,14 @@ const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
 
 export default function BulkUploadPage() {
+  return (
+    <UploadGate>
+      <BulkUploadPageInner />
+    </UploadGate>
+  );
+}
+
+function BulkUploadPageInner() {
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,7 +82,10 @@ export default function BulkUploadPage() {
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-upload-secret": getUploadSecret() ?? "",
+        },
         body: JSON.stringify({
           filename: item.file.name,
           contentType: item.file.type,
@@ -113,7 +125,10 @@ export default function BulkUploadPage() {
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-upload-secret": getUploadSecret() ?? "",
+        },
         body: JSON.stringify({ videoId, key, hashtags: item.hashtags }),
       });
       const finalizeData = await finalizeRes.json();

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HashtagPicker } from "./HashtagPicker";
 import { VideoPreview } from "./VideoPreview";
+import { UploadGate, getUploadSecret } from "./UploadGate";
 
 type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -103,7 +104,10 @@ function UploadPageInner() {
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-upload-secret": getUploadSecret() ?? "",
+        },
         body: JSON.stringify({
           filename: selectedFile.name,
           contentType: selectedFile.type,
@@ -144,7 +148,10 @@ function UploadPageInner() {
       const finalizeRes = await fetch("/api/upload/finalize", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-upload-secret": getUploadSecret() ?? "",
+        },
         body: JSON.stringify({ videoId, key, hashtags }),
       });
       const finalizeData = await finalizeRes.json();
@@ -298,9 +305,11 @@ function UploadPageInner() {
 
 export default function UploadPage() {
   return (
-    <Suspense fallback={null}>
-      <UploadPageInner />
-    </Suspense>
+    <UploadGate>
+      <Suspense fallback={null}>
+        <UploadPageInner />
+      </Suspense>
+    </UploadGate>
   );
 }
 
