@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { HashtagPicker } from "@/app/upload/HashtagPicker";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
@@ -14,7 +14,7 @@ interface QueueItem {
   error?: string;
 }
 
-type Stage = "select" | "queue" | "uploading" | "done";
+type Stage = "select" | "review";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
@@ -45,7 +45,7 @@ function VideoPreview({ file }: { file: File }) {
 export default function BulkUploadPage() {
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFilesSelected = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith("video/"));
@@ -59,7 +59,7 @@ export default function BulkUploadPage() {
     }));
 
     setItems(newItems);
-    setStage("queue");
+    setStage("review");
   }, []);
 
   const toggleHashtag = (index: number, tag: string) => {
@@ -67,7 +67,10 @@ export default function BulkUploadPage() {
       prev.map((item, i) => {
         if (i !== index) return item;
         const has = item.hashtags.includes(tag);
-        return { ...item, hashtags: has ? item.hashtags.filter((t) => t !== tag) : [...item.hashtags, tag] };
+        return {
+          ...item,
+          hashtags: has ? item.hashtags.filter((t) => t !== tag) : [...item.hashtags, tag],
+        };
       })
     );
   };
@@ -76,11 +79,18 @@ export default function BulkUploadPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const uploadAttempt = async (
-    index: number
-  ): Promise<{ success: boolean; videoId?: string; error?: string }> => {
-    const item = items[index];
+  const retryItem = (index: number) => {
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === index ? { ...it, status: "pending", error: undefined, progress: 0 } : it
+      )
+    );
+  };
 
+  const uploadAttempt = async (
+    index: number,
+    item: QueueItem
+  ): Promise<{ success: boolean; videoId?: string; error?: string }> => {
     try {
       const initRes = await fetch("/api/upload/init", {
         method: "POST",
@@ -140,21 +150,30 @@ export default function BulkUploadPage() {
     }
   };
 
-  const uploadOne = async (index: number): Promise<void> => {
+  // Uploads exactly one video — whichever is next in line — then stops and
+  // waits. No automatic chaining to the next one; that's the whole point.
+  const uploadNext = async () => {
+    const nextIndex = items.findIndex((it) => it.status === "pending");
+    if (nextIndex === -1) return;
+
+    setIsUploading(true);
     setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, status: "uploading", progress: 0 } : it))
+      prev.map((it, i) => (i === nextIndex ? { ...it, status: "uploading", progress: 0 } : it))
     );
 
+    const targetItem = items[nextIndex];
     let result: { success: boolean; videoId?: string; error?: string } = { success: false };
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      result = await uploadAttempt(index);
+      result = await uploadAttempt(nextIndex, targetItem);
       if (result.success) break;
 
       if (attempt < MAX_RETRIES) {
         setItems((prev) =>
           prev.map((it, i) =>
-            i === index ? { ...it, error: `Retrying (attempt ${attempt + 2} of ${MAX_RETRIES + 1})…` } : it
+            i === nextIndex
+              ? { ...it, error: `Retrying (attempt ${attempt + 2} of ${MAX_RETRIES + 1})…` }
+              : it
           )
         );
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
@@ -164,7 +183,7 @@ export default function BulkUploadPage() {
     if (result.success) {
       setItems((prev) =>
         prev.map((it, i) =>
-          i === index
+          i === nextIndex
             ? { ...it, status: "done", progress: 100, videoId: result.videoId, error: undefined }
             : it
         )
@@ -172,18 +191,12 @@ export default function BulkUploadPage() {
     } else {
       setItems((prev) =>
         prev.map((it, i) =>
-          i === index ? { ...it, status: "error", error: result.error || "Upload failed" } : it
+          i === nextIndex ? { ...it, status: "error", error: result.error || "Upload failed" } : it
         )
       );
     }
-  };
 
-  const startBulkUpload = async () => {
-    setStage("uploading");
-    for (let i = 0; i < items.length; i++) {
-      await uploadOne(i);
-    }
-    setStage("done");
+    setIsUploading(false);
   };
 
   const reset = () => {
@@ -191,9 +204,10 @@ export default function BulkUploadPage() {
     setStage("select");
   };
 
+  const pendingCount = items.filter((i) => i.status === "pending").length;
   const doneCount = items.filter((i) => i.status === "done").length;
   const errorCount = items.filter((i) => i.status === "error").length;
-  const readyCount = items.filter((i) => i.hashtags.length > 0).length;
+  const allSettled = items.length > 0 && pendingCount === 0;
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
@@ -209,7 +223,8 @@ export default function BulkUploadPage() {
       <div className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-lg font-semibold mb-1">Bulk upload</h1>
         <p className="text-sm text-[#8a8a92] mb-8">
-          Select multiple videos, tap the hashtags that fit each one, then upload them all in one go.
+          Select multiple videos and tag each one, then upload them one at a time — you decide
+          when each one starts.
         </p>
 
         {stage === "select" && (
@@ -238,138 +253,107 @@ export default function BulkUploadPage() {
           </label>
         )}
 
-        {stage === "queue" && (
+        {stage === "review" && (
           <div>
             <div className="flex flex-col gap-3 mb-6">
               {items.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-3"
+                  className="rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-3"
                 >
-                  <VideoPreview file={item.file} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-[#5a5a62] truncate">{item.file.name}</p>
-                      <button
-                        onClick={() => removeItem(i)}
-                        className="text-xs text-[#5a5a62] hover:text-[#ff6b8a] transition-colors shrink-0 ml-2"
-                      >
-                        remove
-                      </button>
+                  <div className="flex items-start gap-3">
+                    <VideoPreview file={item.file} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-[#5a5a62] truncate">{item.file.name}</p>
+                        {item.status === "pending" && (
+                          <button
+                            onClick={() => removeItem(i)}
+                            className="text-xs text-[#5a5a62] hover:text-[#ff6b8a] transition-colors shrink-0 ml-2"
+                          >
+                            remove
+                          </button>
+                        )}
+                      </div>
+
+                      {item.status === "pending" && (
+                        <HashtagPicker
+                          selected={item.hashtags}
+                          onToggle={(tag) => toggleHashtag(i, tag)}
+                          compact
+                        />
+                      )}
+
+                      {item.status === "uploading" && (
+                        <div>
+                          <div className="w-full h-1 rounded-full bg-[#1c1c20] overflow-hidden">
+                            <div
+                              className="h-full bg-[#ff3d6e] transition-all duration-150"
+                              style={{ width: `${item.progress}%` }}
+                            />
+                          </div>
+                          {item.error && (
+                            <p className="text-[11px] text-[#8a8a92] mt-1">{item.error}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {item.status === "done" && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-[#4ade80]">✓ uploaded</p>
+                          {item.videoId && (
+                            <a
+                              href={`/v/${item.videoId}`}
+                              className="text-xs px-2.5 py-1 rounded-md bg-[#1c1c20] hover:bg-[#26262c] transition-colors font-medium"
+                            >
+                              view →
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {item.status === "error" && (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-[#ff6b8a] truncate">{item.error}</p>
+                          <button
+                            onClick={() => retryItem(i)}
+                            className="text-xs px-2.5 py-1 rounded-md bg-[#1c1c20] hover:bg-[#26262c] transition-colors shrink-0 font-medium"
+                          >
+                            retry
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <HashtagPicker
-                      selected={item.hashtags}
-                      onToggle={(tag) => toggleHashtag(i, tag)}
-                      compact
-                    />
                   </div>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-[#5a5a62] mb-4">
-              {readyCount} of {items.length} tagged and ready
-            </p>
-            <button
-              onClick={startBulkUpload}
-              disabled={items.length === 0 || readyCount < items.length}
-              className="w-full rounded-lg bg-[#ff3d6e] text-white text-sm font-semibold py-3 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#ff5580] transition-colors"
-            >
-              upload all {items.length}
-            </button>
-          </div>
-        )}
 
-        {stage === "uploading" && (
-          <div className="flex flex-col gap-2">
-            {items.map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-3"
+            {!allSettled ? (
+              <button
+                onClick={uploadNext}
+                disabled={isUploading || pendingCount === 0}
+                className="w-full rounded-lg bg-[#ff3d6e] text-white text-sm font-semibold py-3 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#ff5580] transition-colors"
               >
-                <VideoPreview file={item.file} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">
-                    {item.hashtags.map((t) => `#${t}`).join(" ") || item.file.name}
-                  </p>
-                  {item.status === "uploading" && (
-                    <div className="w-full h-1 rounded-full bg-[#1c1c20] overflow-hidden mt-1.5">
-                      <div
-                        className="h-full bg-[#ff3d6e] transition-all duration-150"
-                        style={{ width: `${item.progress}%` }}
-                      />
-                    </div>
-                  )}
-                  {item.error && item.status === "uploading" && (
-                    <p className="text-[11px] text-[#8a8a92] mt-1">{item.error}</p>
-                  )}
-                </div>
-                <StatusBadge status={item.status} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {stage === "done" && (
-          <div>
-            <p className="text-sm mb-6">
-              Done — <span className="text-[#f2f2f0] font-medium">{doneCount} uploaded</span>
-              {errorCount > 0 && <span className="text-[#ff6b8a]"> · {errorCount} failed</span>}
-            </p>
-            <div className="flex flex-col gap-2 mb-6">
-              {items.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5"
+                {isUploading ? "uploading…" : `upload next (${pendingCount} remaining)`}
+              </button>
+            ) : (
+              <div>
+                <p className="text-sm mb-4">
+                  Done — <span className="text-[#f2f2f0] font-medium">{doneCount} uploaded</span>
+                  {errorCount > 0 && <span className="text-[#ff6b8a]"> · {errorCount} failed</span>}
+                </p>
+                <button
+                  onClick={reset}
+                  className="w-full rounded-lg border border-[#26262c] text-sm font-medium py-3 hover:border-[#3a3a42] transition-colors"
                 >
-                  <VideoPreview file={item.file} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">
-                      {item.hashtags.map((t) => `#${t}`).join(" ") || item.file.name}
-                    </p>
-                    {item.status === "error" && (
-                      <p className="text-xs text-[#ff6b8a] mt-0.5">{item.error}</p>
-                    )}
-                  </div>
-                  {item.status === "done" && item.videoId ? (
-                    <a
-                      href={`/v/${item.videoId}`}
-                      className="text-xs px-2.5 py-1 rounded-md bg-[#1c1c20] hover:bg-[#26262c] transition-colors shrink-0 font-medium"
-                    >
-                      view →
-                    </a>
-                  ) : (
-                    <StatusBadge status={item.status} />
-                  )}
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={reset}
-              className="w-full rounded-lg border border-[#26262c] text-sm font-medium py-3 hover:border-[#3a3a42] transition-colors"
-            >
-              upload more
-            </button>
+                  upload more
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
     </main>
-  );
-}
-
-function StatusBadge({ status }: { status: FileStatus }) {
-  const styles: Record<FileStatus, string> = {
-    pending: "text-[#5a5a62]",
-    uploading: "text-[#ff3d6e]",
-    done: "text-[#4ade80]",
-    error: "text-[#ff6b8a]",
-  };
-  const labels: Record<FileStatus, string> = {
-    pending: "waiting",
-    uploading: "uploading…",
-    done: "✓ done",
-    error: "✗ failed",
-  };
-  return (
-    <span className={`text-xs font-medium shrink-0 ${styles[status]}`}>{labels[status]}</span>
   );
 }
