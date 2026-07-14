@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { HashtagPicker } from "@/app/upload/HashtagPicker";
+import { VideoPreview } from "@/app/upload/VideoPreview";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -18,29 +19,6 @@ type Stage = "select" | "review";
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
-
-function VideoPreview({ file }: { file: File }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-
-  return (
-    <video
-      src={url ?? undefined}
-      className="w-12 h-12 rounded-md object-cover bg-black shrink-0"
-      muted
-      playsInline
-      preload="metadata"
-      onLoadedMetadata={(e) => {
-        e.currentTarget.currentTime = 0.1;
-      }}
-    />
-  );
-}
 
 export default function BulkUploadPage() {
   const [stage, setStage] = useState<Stage>("select");

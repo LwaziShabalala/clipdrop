@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HashtagPicker } from "./HashtagPicker";
+import { VideoPreview } from "./VideoPreview";
 
 type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -365,8 +366,9 @@ function DetailsForm({
 
   return (
     <div>
-      <div className="rounded-xl border border-[#26262c] bg-[#141417] px-4 py-3 mb-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-[#c8c8cc] truncate">{file.name}</p>
+      <div className="rounded-xl border border-[#26262c] bg-[#141417] px-4 py-3 mb-5 flex items-center gap-3">
+        <VideoPreview file={file} size={64} />
+        <p className="text-sm text-[#c8c8cc] truncate flex-1">{file.name}</p>
         <button
           onClick={onCancel}
           className="text-xs text-[#5a5a62] hover:text-[#8a8a92] transition-colors shrink-0"
