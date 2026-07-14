@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { AVAILABLE_HASHTAGS } from "@/lib/hashtags";
+import { HashtagPicker } from "@/app/upload/HashtagPicker";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
@@ -39,35 +39,6 @@ function VideoPreview({ file }: { file: File }) {
         e.currentTarget.currentTime = 0.1;
       }}
     />
-  );
-}
-
-function HashtagChips({
-  selected,
-  onToggle,
-}: {
-  selected: string[];
-  onToggle: (tag: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {AVAILABLE_HASHTAGS.map((tag) => {
-        const isSelected = selected.includes(tag);
-        return (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => onToggle(tag)}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isSelected
-              ? "bg-[#ff3d6e] border-[#ff3d6e] text-white"
-              : "border-[#26262c] text-[#8a8a92] hover:border-[#3a3a42]"
-              }`}
-          >
-            #{tag}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -286,9 +257,10 @@ export default function BulkUploadPage() {
                         remove
                       </button>
                     </div>
-                    <HashtagChips
+                    <HashtagPicker
                       selected={item.hashtags}
                       onToggle={(tag) => toggleHashtag(i, tag)}
+                      compact
                     />
                   </div>
                 </div>

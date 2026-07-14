@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AVAILABLE_HASHTAGS } from "@/lib/hashtags";
+import { HashtagPicker } from "./HashtagPicker";
 
 type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -378,23 +378,8 @@ function DetailsForm({
       <label className="text-xs font-medium text-[#8a8a92] mb-2 block">
         Pick hashtags that fit this video
       </label>
-      <div className="flex flex-wrap gap-2 mb-5">
-        {AVAILABLE_HASHTAGS.map((tag) => {
-          const isSelected = hashtags.includes(tag);
-          return (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => toggle(tag)}
-              className={`text-sm px-3.5 py-2 rounded-full border transition-colors ${isSelected
-                ? "bg-[#ff3d6e] border-[#ff3d6e] text-white"
-                : "border-[#26262c] text-[#8a8a92] hover:border-[#3a3a42]"
-                }`}
-            >
-              #{tag}
-            </button>
-          );
-        })}
+      <div className="mb-5">
+        <HashtagPicker selected={hashtags} onToggle={toggle} />
       </div>
 
       <button
