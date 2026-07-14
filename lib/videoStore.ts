@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 export interface VideoRecord {
   videoId: string;
   title: string;
+  hashtags: string[];
   videoUrl: string;
   thumbUrl: string;
   width: number;
@@ -17,6 +18,7 @@ export interface VideoRecord {
 type VideoRow = {
   videoId: string;
   title: string;
+  hashtags: string[];
   videoUrl: string;
   thumbUrl: string;
   width: number;
@@ -32,6 +34,7 @@ function toVideoRecord(row: VideoRow): VideoRecord {
   return {
     videoId: row.videoId,
     title: row.title,
+    hashtags: row.hashtags ?? [],
     videoUrl: row.videoUrl,
     thumbUrl: row.thumbUrl,
     width: row.width,
@@ -49,6 +52,7 @@ export async function saveVideo(record: VideoRecord) {
     data: {
       videoId: record.videoId,
       title: record.title,
+      hashtags: record.hashtags,
       videoUrl: record.videoUrl,
       thumbUrl: record.thumbUrl,
       width: record.width,
@@ -67,9 +71,6 @@ export async function getVideo(videoId: string): Promise<VideoRecord | null> {
   return row ? toVideoRecord(row) : null;
 }
 
-// Capped at 30 by default — the homepage feed doesn't need every video ever
-// uploaded, just the most recent batch. Without this, the query (and the
-// page's load time) would keep growing forever as more videos get added.
 export async function listVideos(limit = 30): Promise<VideoRecord[]> {
   const rows = await prisma.video.findMany({
     orderBy: { createdAt: "desc" },

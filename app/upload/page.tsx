@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { AVAILABLE_HASHTAGS } from "@/lib/hashtags";
 
 type Stage = "idle" | "details" | "loading" | "uploading" | "trimming" | "generating" | "done" | "error";
 
@@ -25,23 +25,15 @@ interface ClipResult {
 
 const MAX_CLIP_SECONDS = 15;
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timed out")), ms)),
-  ]);
-}
-
 function UploadPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { getToken } = useAuth();
   const existingVideoId = searchParams.get("videoId");
 
   const [stage, setStage] = useState<Stage>(existingVideoId ? "loading" : "idle");
   const [error, setError] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [clip, setClip] = useState<ClipResult | null>(null);
@@ -52,8 +44,6 @@ function UploadPageInner() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Arrived from a video's watch page ("make a clip") — load that video and
-  // go straight to trimming instead of showing the drop zone.
   useEffect(() => {
     if (!existingVideoId) return;
 
@@ -89,7 +79,7 @@ function UploadPageInner() {
   const handleFileSelect = useCallback((file: File) => {
     setError("");
     setSelectedFile(file);
-    setTitle(file.name.replace(/\.[^/.]+$/, ""));
+    setHashtags([]);
     setStage("details");
   }, []);
 
@@ -102,12 +92,6 @@ function UploadPageInner() {
     [handleFileSelect]
   );
 
-  // Direct-to-storage upload: the file goes straight from the browser to
-  // R2, never through our own server. Our server's only job is (1) handing
-  // out a temporary upload permission first, and (2) processing the file
-  // afterward (thumbnail, duration, database) once it's already there —
-  // it never has to receive or hold the file itself, so its memory use no
-  // longer depends on file size at all.
   const handleConfirmUpload = useCallback(async () => {
     if (!selectedFile) return;
     setError("");
@@ -160,7 +144,7 @@ function UploadPageInner() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId, key, title: title.trim() }),
+        body: JSON.stringify({ videoId, key, hashtags }),
       });
       const finalizeData = await finalizeRes.json();
 
@@ -176,7 +160,7 @@ function UploadPageInner() {
       setError("Upload failed. Check your connection and try again.");
       setStage("error");
     }
-  }, [selectedFile, title, router]);
+  }, [selectedFile, hashtags, router]);
 
   const handleGenerate = async () => {
     if (!upload) return;
@@ -215,7 +199,7 @@ function UploadPageInner() {
   const reset = () => {
     setStage("idle");
     setSelectedFile(null);
-    setTitle("");
+    setHashtags([]);
     setUploadProgress(0);
     setUpload(null);
     setClip(null);
@@ -242,12 +226,12 @@ function UploadPageInner() {
         {stage === "details" && selectedFile && (
           <DetailsForm
             file={selectedFile}
-            title={title}
-            setTitle={setTitle}
+            hashtags={hashtags}
+            setHashtags={setHashtags}
             onConfirm={handleConfirmUpload}
             onCancel={() => {
               setSelectedFile(null);
-              setTitle("");
+              setHashtags([]);
               setStage("idle");
             }}
           />
@@ -362,17 +346,23 @@ function DropZone({
 
 function DetailsForm({
   file,
-  title,
-  setTitle,
+  hashtags,
+  setHashtags,
   onConfirm,
   onCancel,
 }: {
   file: File;
-  title: string;
-  setTitle: (s: string) => void;
+  hashtags: string[];
+  setHashtags: (tags: string[]) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const toggle = (tag: string) => {
+    setHashtags(
+      hashtags.includes(tag) ? hashtags.filter((t) => t !== tag) : [...hashtags, tag]
+    );
+  };
+
   return (
     <div>
       <div className="rounded-xl border border-[#26262c] bg-[#141417] px-4 py-3 mb-5 flex items-center justify-between gap-3">
@@ -385,19 +375,31 @@ function DetailsForm({
         </button>
       </div>
 
-      <label className="text-xs font-medium text-[#8a8a92] mb-1.5 block">Title</label>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Give your video a title"
-        autoFocus
-        className="w-full rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5 text-sm placeholder:text-[#5a5a62] outline-none focus:border-[#3a3a42] transition-colors mb-5"
-        maxLength={100}
-      />
+      <label className="text-xs font-medium text-[#8a8a92] mb-2 block">
+        Pick hashtags that fit this video
+      </label>
+      <div className="flex flex-wrap gap-2 mb-5">
+        {AVAILABLE_HASHTAGS.map((tag) => {
+          const isSelected = hashtags.includes(tag);
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggle(tag)}
+              className={`text-sm px-3.5 py-2 rounded-full border transition-colors ${isSelected
+                ? "bg-[#ff3d6e] border-[#ff3d6e] text-white"
+                : "border-[#26262c] text-[#8a8a92] hover:border-[#3a3a42]"
+                }`}
+            >
+              #{tag}
+            </button>
+          );
+        })}
+      </div>
 
       <button
         onClick={onConfirm}
-        disabled={!title.trim()}
+        disabled={hashtags.length === 0}
         className="w-full rounded-lg bg-[#ff3d6e] text-white text-sm font-semibold py-3 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#ff5580] transition-colors"
       >
         upload

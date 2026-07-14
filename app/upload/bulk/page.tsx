@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { AVAILABLE_HASHTAGS } from "@/lib/hashtags";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
 
 interface QueueItem {
   file: File;
-  title: string;
+  hashtags: string[];
   status: FileStatus;
   progress: number;
   videoId?: string;
@@ -18,10 +19,6 @@ type Stage = "select" | "queue" | "uploading" | "done";
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
 
-// Shows an actual frame from the video file itself — no upload needed,
-// since the browser already has the file locally. Seeking to a tiny
-// offset once metadata loads is what makes the frame actually render
-// instead of showing a blank box.
 function VideoPreview({ file }: { file: File }) {
   const [url, setUrl] = useState<string | null>(null);
 
@@ -45,17 +42,39 @@ function VideoPreview({ file }: { file: File }) {
   );
 }
 
-function cleanupFilename(filename: string): string {
-  const withoutExt = filename.replace(/\.[^/.]+$/, "");
-  const withSpaces = withoutExt.replace(/[_-]+/g, " ");
-  const withoutLeadingNumber = withSpaces.replace(/^\d+\s*/, "");
-  const trimmed = withoutLeadingNumber.trim();
-  return trimmed || withSpaces.trim() || "Untitled video";
+function HashtagChips({
+  selected,
+  onToggle,
+}: {
+  selected: string[];
+  onToggle: (tag: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {AVAILABLE_HASHTAGS.map((tag) => {
+        const isSelected = selected.includes(tag);
+        return (
+          <button
+            key={tag}
+            type="button"
+            onClick={() => onToggle(tag)}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isSelected
+              ? "bg-[#ff3d6e] border-[#ff3d6e] text-white"
+              : "border-[#26262c] text-[#8a8a92] hover:border-[#3a3a42]"
+              }`}
+          >
+            #{tag}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function BulkUploadPage() {
   const [stage, setStage] = useState<Stage>("select");
   const [items, setItems] = useState<QueueItem[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFilesSelected = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith("video/"));
@@ -63,7 +82,7 @@ export default function BulkUploadPage() {
 
     const newItems: QueueItem[] = fileArray.map((file) => ({
       file,
-      title: cleanupFilename(file.name),
+      hashtags: [],
       status: "pending",
       progress: 0,
     }));
@@ -72,19 +91,20 @@ export default function BulkUploadPage() {
     setStage("queue");
   }, []);
 
-  const updateTitle = (index: number, title: string) => {
-    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, title } : item)));
+  const toggleHashtag = (index: number, tag: string) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const has = item.hashtags.includes(tag);
+        return { ...item, hashtags: has ? item.hashtags.filter((t) => t !== tag) : [...item.hashtags, tag] };
+      })
+    );
   };
 
   const removeItem = (index: number) => {
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Direct-to-storage upload, same as the single-upload page: the file
-  // goes straight from the browser to R2, never through our own server.
-  // This is what actually fixes bulk upload's memory crashes — the server
-  // never has to receive or hold any of the files at all, so its memory
-  // use doesn't grow with file size or how many uploads happen in a row.
   const uploadAttempt = async (
     index: number
   ): Promise<{ success: boolean; videoId?: string; error?: string }> => {
@@ -135,7 +155,7 @@ export default function BulkUploadPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId, key, title: item.title.trim() }),
+        body: JSON.stringify({ videoId, key, hashtags: item.hashtags }),
       });
       const finalizeData = await finalizeRes.json();
 
@@ -149,9 +169,6 @@ export default function BulkUploadPage() {
     }
   };
 
-  // Retries automatically on failure — a transient hiccup on one attempt
-  // doesn't permanently fail that file, it just tries again a couple of
-  // times with a short pause first.
   const uploadOne = async (index: number): Promise<void> => {
     setItems((prev) =>
       prev.map((it, i) => (i === index ? { ...it, status: "uploading", progress: 0 } : it))
@@ -205,6 +222,7 @@ export default function BulkUploadPage() {
 
   const doneCount = items.filter((i) => i.status === "done").length;
   const errorCount = items.filter((i) => i.status === "error").length;
+  const readyCount = items.filter((i) => i.hashtags.length > 0).length;
 
   return (
     <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
@@ -220,7 +238,7 @@ export default function BulkUploadPage() {
       <div className="max-w-2xl mx-auto px-6 py-10">
         <h1 className="text-lg font-semibold mb-1">Bulk upload</h1>
         <p className="text-sm text-[#8a8a92] mb-8">
-          Select multiple videos, adjust titles if you want, then upload them all in one go.
+          Select multiple videos, tap the hashtags that fit each one, then upload them all in one go.
         </p>
 
         {stage === "select" && (
@@ -241,7 +259,7 @@ export default function BulkUploadPage() {
               type="file"
               accept="video/*"
               multiple
-              className="hidden"
+              className="sr-only"
               onChange={(e) => {
                 if (e.target.files) handleFilesSelected(e.target.files);
               }}
@@ -251,34 +269,37 @@ export default function BulkUploadPage() {
 
         {stage === "queue" && (
           <div>
-            <div className="flex flex-col gap-2 mb-6">
+            <div className="flex flex-col gap-3 mb-6">
               {items.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-2.5"
+                  className="flex items-start gap-3 rounded-lg border border-[#26262c] bg-[#141417] px-3.5 py-3"
                 >
                   <VideoPreview file={item.file} />
-                  <input
-                    value={item.title}
-                    onChange={(e) => updateTitle(i, e.target.value)}
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-[#5a5a62]"
-                    maxLength={100}
-                  />
-                  <button
-                    onClick={() => removeItem(i)}
-                    className="text-xs text-[#5a5a62] hover:text-[#ff6b8a] transition-colors shrink-0"
-                  >
-                    remove
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-[#5a5a62] truncate">{item.file.name}</p>
+                      <button
+                        onClick={() => removeItem(i)}
+                        className="text-xs text-[#5a5a62] hover:text-[#ff6b8a] transition-colors shrink-0 ml-2"
+                      >
+                        remove
+                      </button>
+                    </div>
+                    <HashtagChips
+                      selected={item.hashtags}
+                      onToggle={(tag) => toggleHashtag(i, tag)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
             <p className="text-xs text-[#5a5a62] mb-4">
-              {items.length} video{items.length !== 1 ? "s" : ""} ready
+              {readyCount} of {items.length} tagged and ready
             </p>
             <button
               onClick={startBulkUpload}
-              disabled={items.length === 0}
+              disabled={items.length === 0 || readyCount < items.length}
               className="w-full rounded-lg bg-[#ff3d6e] text-white text-sm font-semibold py-3 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#ff5580] transition-colors"
             >
               upload all {items.length}
@@ -295,7 +316,9 @@ export default function BulkUploadPage() {
               >
                 <VideoPreview file={item.file} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{item.title || item.file.name}</p>
+                  <p className="text-sm truncate">
+                    {item.hashtags.map((t) => `#${t}`).join(" ") || item.file.name}
+                  </p>
                   {item.status === "uploading" && (
                     <div className="w-full h-1 rounded-full bg-[#1c1c20] overflow-hidden mt-1.5">
                       <div
@@ -328,7 +351,9 @@ export default function BulkUploadPage() {
                 >
                   <VideoPreview file={item.file} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{item.title || item.file.name}</p>
+                    <p className="text-sm truncate">
+                      {item.hashtags.map((t) => `#${t}`).join(" ") || item.file.name}
+                    </p>
                     {item.status === "error" && (
                       <p className="text-xs text-[#ff6b8a] mt-0.5">{item.error}</p>
                     )}

@@ -9,6 +9,7 @@ datasource db {
 model Video {
   videoId          String   @id @default(uuid())
   title            String
+  hashtags         String[] @default([])
   videoUrl         String
   thumbUrl         String
   width            Int

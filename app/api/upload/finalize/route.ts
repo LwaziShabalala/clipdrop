@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { videoId, key, title: titleInput } = body as {
+    const { videoId, key, hashtags } = body as {
       videoId?: string;
       key?: string;
-      title?: string;
+      hashtags?: string[];
     };
 
     if (!videoId || !key) {
@@ -52,11 +52,6 @@ export async function POST(req: NextRequest) {
     await mkdir(WORK_DIR, { recursive: true });
     filepath = path.join(WORK_DIR, `${videoId}${path.extname(key)}`);
 
-    // Pull the file back from R2 to process it locally with ffmpeg —
-    // streamed straight to disk, never held fully in memory. This is a
-    // server-to-storage transfer (fast, same infrastructure), not exposed
-    // to a client's upload speed or connection behavior the way directly
-    // receiving the original upload was.
     console.time(`[${reqId}] download-from-r2`);
     const res = await fetch(videoUrl);
     if (!res.ok || !res.body) {
@@ -101,11 +96,17 @@ export async function POST(req: NextRequest) {
     const thumbBuf = await readFile(thumbPath);
     const thumbUrl = await uploadToR2(`videos/${videoId}.jpg`, thumbBuf, "image/jpeg");
 
-    const title = titleInput?.trim() || "Untitled video";
+    // Hashtags stand in as the display title for now — no typing required
+    // at upload time. They're stored as real, separate data too, not just
+    // mashed into the title string, so a proper human-written title can be
+    // added later (e.g. by verified users) without losing the tags.
+    const tags = Array.isArray(hashtags) ? hashtags.filter(Boolean) : [];
+    const title = tags.length > 0 ? tags.map((t) => `#${t}`).join(" ") : "Untitled video";
 
     await saveVideo({
       videoId,
       title,
+      hashtags: tags,
       videoUrl,
       thumbUrl,
       width,
