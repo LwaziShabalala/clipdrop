@@ -5,9 +5,12 @@ import { getPresignedUploadUrl } from "@/lib/r2";
 
 export async function POST(req: NextRequest) {
   const reqId = randomUUID().slice(0, 8);
-  const hasCookie = (req.headers.get("cookie")?.length ?? 0) > 0;
-  const cookiePreview = req.headers.get("cookie")?.slice(0, 60) ?? "none";
-  console.log(`[init:${reqId}] has cookie header: ${hasCookie}, preview: ${cookiePreview}`);
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  const hasClerkSessionCookie = cookieHeader.includes("__session");
+  const hasClerkClientCookie = cookieHeader.includes("__client");
+  console.log(
+    `[init:${reqId}] cookie header length: ${cookieHeader.length}, has __session: ${hasClerkSessionCookie}, has __client: ${hasClerkClientCookie}`
+  );
 
   const { isAuthenticated, userId } = await auth({ treatPendingAsSignedOut: false });
   console.log(`[init:${reqId}] isAuthenticated: ${isAuthenticated}, userId: ${userId}`);
