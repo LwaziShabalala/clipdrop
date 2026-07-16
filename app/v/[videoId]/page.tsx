@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getVideo } from "@/lib/videoStore";
-import { currentUser } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
 import { ViewTracker } from "./ViewTracker";
@@ -46,13 +45,6 @@ export default async function WatchPage({
     const video = await getVideo(videoId);
 
     if (!video) notFound();
-
-    // Views are counted only by ViewTracker below (client-side, checks
-    // localStorage, and the API it calls also skips the uploader's own
-    // views). No server-side increment here — that was the bug causing
-    // the double-count.
-    const viewer = await currentUser();
-    const isOwner = viewer !== null && viewer.username === video.uploaderName;
 
     return (
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
@@ -121,11 +113,9 @@ export default async function WatchPage({
                     </a>
                 </div>
 
-                {isOwner && (
-                    <div className="mt-3">
-                        <DeleteButton videoId={video.videoId} />
-                    </div>
-                )}
+                <div className="mt-3">
+                    <DeleteButton videoId={video.videoId} />
+                </div>
             </div>
         </main>
     );
