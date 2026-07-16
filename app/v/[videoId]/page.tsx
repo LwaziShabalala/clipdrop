@@ -3,8 +3,11 @@ import { getVideo } from "@/lib/videoStore";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "./DeleteButton";
 import { ViewTracker } from "./ViewTracker";
+import { BannerAd } from "../../BannerAd";
+import Script from "next/script";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const AD_KEY = "c7086ba7a1c0260213ddfe2c1822cbdf";
 
 export async function generateMetadata({
     params,
@@ -50,6 +53,16 @@ export default async function WatchPage({
         <main className="min-h-screen bg-[#0a0a0c] text-[#f2f2f0]">
             <ViewTracker videoId={video.videoId} />
 
+            {/* MyBid — Popunder, Web-push, In-page. Same script as the homepage,
+          now covering this page too since it's where most external
+          traffic actually lands. */}
+            <Script
+                async
+                src="https://js.mbidadm.com/static/scripts.js"
+                data-admpid="447595"
+                strategy="lazyOnload"
+            />
+
             <header className="border-b border-[#1c1c20] px-6 py-4 flex items-center justify-between sticky top-0 bg-[#0a0a0c]/95 backdrop-blur z-20">
                 <a href="/" className="font-bold tracking-tight text-lg">
                     clip<span className="text-[#ff3d6e]">drop</span>
@@ -62,59 +75,85 @@ export default async function WatchPage({
                 </a>
             </header>
 
-            <div className="max-w-4xl mx-auto px-6 py-8">
-                <a
-                    href="/"
-                    className="inline-flex items-center gap-2 text-sm text-[#8a8a92] hover:text-[#f2f2f0] mb-5 transition-colors"
-                >
-                    ← back to all videos
-                </a>
-
-                <div className="rounded-xl overflow-hidden border border-[#26262c] bg-black">
-                    <video
-                        src={video.videoUrl}
-                        poster={video.thumbUrl}
-                        controls
-                        playsInline
-                        className="w-full h-auto block max-h-[70vh]"
-                    />
-                </div>
-
-                <div className="flex items-start justify-between gap-4 mt-5">
-                    <div>
-                        {video.uploaderName && (
-                            <a
-                                href={`/u/${encodeURIComponent(video.uploaderName)}`}
-                                className="flex items-center gap-2 mb-2 w-fit"
-                            >
-                                {video.uploaderImageUrl && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={video.uploaderImageUrl}
-                                        alt={video.uploaderName}
-                                        className="w-6 h-6 rounded-full object-cover"
-                                    />
-                                )}
-                                <span className="text-sm font-medium text-[#d4d4d8] hover:text-white transition-colors">
-                                    {video.uploaderName}
-                                </span>
-                            </a>
-                        )}
-                        <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
-                        <p className="text-xs text-[#5a5a62] mt-1">
-                            {formatCount(video.views ?? 0)} views · {timeAgo(video.createdAt)}
-                        </p>
-                    </div>
-                    <a
-                        href={`/upload?videoId=${video.videoId}`}
-                        className="shrink-0 text-sm font-medium px-4 py-2.5 rounded-lg bg-[#ff3d6e] text-white hover:bg-[#ff5580] transition-colors"
+            <div className="flex flex-col lg:flex-row max-w-[1400px] mx-auto">
+                {/* Left ad — this page is where most external traffic (X, Reddit
+            links) actually lands, so it needed its own ads, not just the
+            homepage. */}
+                <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
+                    <div
+                        className="flex flex-col items-center"
+                        style={{ width: 160, marginLeft: "auto", marginRight: 0 }}
                     >
-                        make a clip
-                    </a>
+                        <BannerAd adKey={AD_KEY} />
+                    </div>
                 </div>
 
-                <div className="mt-3">
-                    <DeleteButton videoId={video.videoId} />
+                <div className="flex-1 px-6 py-8">
+                    <div className="max-w-4xl mx-auto">
+                        <a
+                            href="/"
+                            className="inline-flex items-center gap-2 text-sm text-[#8a8a92] hover:text-[#f2f2f0] mb-5 transition-colors"
+                        >
+                            ← back to all videos
+                        </a>
+
+                        <div className="rounded-xl overflow-hidden border border-[#26262c] bg-black">
+                            <video
+                                src={video.videoUrl}
+                                poster={video.thumbUrl}
+                                controls
+                                playsInline
+                                className="w-full h-auto block max-h-[70vh]"
+                            />
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 mt-5">
+                            <div>
+                                {video.uploaderName && (
+                                    <a
+                                        href={`/u/${encodeURIComponent(video.uploaderName)}`}
+                                        className="flex items-center gap-2 mb-2 w-fit"
+                                    >
+                                        {video.uploaderImageUrl && (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={video.uploaderImageUrl}
+                                                alt={video.uploaderName}
+                                                className="w-6 h-6 rounded-full object-cover"
+                                            />
+                                        )}
+                                        <span className="text-sm font-medium text-[#d4d4d8] hover:text-white transition-colors">
+                                            {video.uploaderName}
+                                        </span>
+                                    </a>
+                                )}
+                                <h1 className="text-xl font-semibold text-[#f2f2f0]">{video.title}</h1>
+                                <p className="text-xs text-[#5a5a62] mt-1">
+                                    {formatCount(video.views ?? 0)} views · {timeAgo(video.createdAt)}
+                                </p>
+                            </div>
+                            <a
+                                href={`/upload?videoId=${video.videoId}`}
+                                className="shrink-0 text-sm font-medium px-4 py-2.5 rounded-lg bg-[#ff3d6e] text-white hover:bg-[#ff5580] transition-colors"
+                            >
+                                make a clip
+                            </a>
+                        </div>
+
+                        <div className="mt-3">
+                            <DeleteButton videoId={video.videoId} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right ad */}
+                <div className="hidden lg:flex lg:flex-col shrink-0 pt-12" style={{ width: 240 }}>
+                    <div
+                        className="flex flex-col items-center"
+                        style={{ width: 160, marginLeft: 0, marginRight: "auto" }}
+                    >
+                        <BannerAd adKey={AD_KEY} />
+                    </div>
                 </div>
             </div>
         </main>
